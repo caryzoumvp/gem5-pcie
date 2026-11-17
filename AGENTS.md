@@ -204,6 +204,8 @@ Read these design documents before implementing the switch:
    contracts, fidelity levels, milestones, and acceptance criteria.
 4. `docs/pcie_switch/PCIe6_Implementation_Plan.md`: phased tasks,
    dependencies, exit criteria, and validation evidence.
+5. `docs/pcie_switch/PCIe6_Validation_Scenarios.md`: scenario inputs,
+   independent expected results, and milestone exit checks.
 
 This is a proposed gem5 timing model, not an existing PCIe 6.0 implementation.
 Use gem5's event queue and existing PCI configuration infrastructure. Keep
@@ -222,6 +224,51 @@ comparison; it is not protocol evidence. No silent congestion drops,
 duplicate completion, or second independent event clock in the timing model.
 Gen6 shared flow control must be covered before claiming detailed FLIT
 fidelity; a dedicated-credit approximation must be labeled accordingly.
+
+### SimAI integration
+
+After the gem5 cycle-level profile passes M3 protocol/resource/timing checks,
+integrate SimAI through AstraNetworkAPI as M4. Read the SimAI-side design at
+`/workspaces/SimAI/docs/pcie_switch/PCIe6_Simulation_Architecture.md` and audit
+current APIs before implementing. Reuse the same gem5 endpoint/link/switch
+runtime for microbenchmarks and workloads. All ranks share one event queue;
+message matching, send/receive completion, bounded injection, and DAG feedback
+need explicit tests. Do not duplicate the PCIe core or inherit NS3/NVLink
+latency/PFC behavior. UI/schema preparation may precede this cycle gate.
+
+### New PCIe source attribution
+
+The user specifies `Copyright (c) 2026 cary` (no company). New PCIe code
+and tests inherit the existing project license described by `COPYING` and
+`LICENSE`; use the root `LICENSE` header with this copyright holder. Do not
+add a separate license file, relicense existing source, or copy another
+institution's copyright holder. This supersedes the earlier MIT request.
+
+### Stage completion and delegation
+
+For this PCIe project, implement one reviewable M0-M5 stage at a time.
+After its exit criteria pass, update the stage status and validation evidence,
+then commit the stage's code, tests, and documentation together. The user
+has authorized these stage commits; do not push without instruction. Do not
+mark a stage complete merely because a subset or its documents are done.
+Preserve unrelated user changes and inspect the staged diff before commit.
+
+The user requests low-cost subagents for bounded work. Prefer a low-cost
+model for independent read-only reviews, test-matrix audits, or narrow tasks
+with clear inputs and outputs. Explain each delegation briefly. Keep core
+integration and final verification with the primary agent, review every
+result, and avoid full-history forks when a self-contained task suffices.
+Do not delegate shared-file edits without explicit file ownership.
+
+### Test-driven development
+
+TDD is the development method, not a replacement architecture or roadmap.
+Preserve the gem5 switch implementation design and M0-M5 feature milestones.
+For each task, define executable scenarios, independent expected results,
+and exit criteria before implementing the feature; record semantic Red,
+minimal Green, and regression evidence. Do not impose a functional-to-
+SystemC-to-RTL lowering pipeline on this simulator project. The validation
+scenario document supplements the implementation plan, not vice versa.
 
 ### Document ownership
 

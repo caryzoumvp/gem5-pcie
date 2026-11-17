@@ -1,0 +1,44 @@
+{
+    "schema_version": 1,
+    "execution_mode": "pcie6_timing",
+    "inputs": {
+        "rcb": 128
+    },
+    "protocol": {
+        "rcb_role": "endpoint",
+        "shared_fc_tx": true,
+        "shared_fc_rx": false
+    },
+    "topology": {
+        "kind": "transparent_tree",
+        "nodes": [
+            {
+                "id": "root",
+                "kind": "root"
+            },
+            {
+                "id": "sw",
+                "kind": "switch"
+            },
+            {
+                "id": "ep",
+                "kind": "endpoint"
+            }
+        ],
+        "links": [
+            [
+                "root",
+                "sw"
+            ],
+            [
+                "sw",
+                "ep"
+            ]
+        ]
+    },
+    "resources": {
+        "rx_header_slots": 8,
+        "rx_data_bytes": 4096,
+        "descriptor_slots": 8
+    }
+}

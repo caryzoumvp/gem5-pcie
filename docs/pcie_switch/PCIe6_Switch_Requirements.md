@@ -1,19 +1,23 @@
 # PCIe 6.0 Switch 仿真需求定义
 
-版本：v0.9｜日期：2026-11-17｜状态：需求与验收计划，尚无实现结果。
+版本：v1.0（补充SimAI集成需求）｜日期：2026-11-17｜状态：需求与验收计划，尚无实现结果。
 
 ## 1. 目标、来源与优先级
 
 本项目在gem5中建立PCIe 6.0 Switch性能与资源仿真，回答离线实验台的
 “目标带宽能否达到、受什么限制、需要多少端口/数据面/缓存资源”问题。
 协议正确性以正式规范为准，功能范围由实验台驱动，controller资料补充
-实现合同。本文替换此前以竞品产品规格或DWC controller为中心的需求。
+实现合同。gem5周期级模型通过验收后，必须接入SimAI/SimCCL，使同一
+PCIe数据面驱动模型通信与计算依赖，输出闭环工作负载性能。只完成硬件
+微基准、导出带宽/延迟标量或离线flow replay，不满足SimAI集成交付。
+本文替换此前以竞品产品规格或DWC controller为中心的需求。
 
 | 优先级 | 来源 | 决定内容 | 不能据此承诺 |
 |---|---|---|---|
 | 1 | [PCI Express Base Specification Revision 6.0](PCI-Express-Base-Specification-Revision-6.0.pdf)，本地6.0-1.0-PUB | TLP/FLIT、事务身份、ordering、路由、FC和重传的规范行为 | 本模型已经完整合规或已做PHY签核 |
 | 2 | [PCIe6_Scaleup_Lab_Offline.html](PCIe6_Scaleup_Lab_Offline.html) | 应用功能、设计输入、资源推导、结果与交换格式 | 其中简化公式等于全部规范规则 |
 | 3 | [pcie_sw_databook.pdf](pcie_sw_databook.pdf)，DWC v5.71a，May 2020 | controller/application边界、队列、接口、配置代理等细化参考 | Gen6支持、完整Switch或本项目必须复现DWC RTL |
+| 集成范围 | SimAI侧架构与AstraNetworkAPI/SimCCL，见§12 | workload、API、消息/完成/时间与构建兼容 | 覆盖PCIe规范或复制一套硬件后端 |
 | 补充层 | 附录A竞品资料与§11补充目标 | 产品容量、功能候选、性能对标与扫描目标 | 取代规范、自动成为首版强制验收或本项目实测能力 |
 
 发生冲突时：规范约束优先；HTML近似保留为显式`lab_reference`模式，
@@ -32,11 +36,13 @@
 | B-03 | 硬件仿真：单链路、单Switch和级联 | 当前配置运行、吞吐/时延/停顿/占用及目标可达性 |
 | B-04 | Incast与突发 | 端口比、热点、Tag/信用/端口/Fabric瓶颈与容量不足诊断 |
 | B-05 | 对比、模板、验证记录和历史版本 | 配置快照、结果来源、模式、可复现对比与导出 |
-| B-06 | 后续workload联动 | SimAI/SimCCL或trace提供流量/依赖，PCIe后端负责时序 |
+| B-06 | SimAI闭环工作负载（周期模型验收后必须交付） | SimAI/SimCCL调度/展开通信依赖，同一gem5 PCIe runtime负责硬件周期与完成反馈；要求见SIM-01–SIM-16 |
 | B-07 | 后续协议/产品扩展 | 多域/NTB、AI复制/INC、CXL等独立立项，不阻塞核心实验台交付 |
 
-首版先实现硬件页的配置兼容、解析sizing和synthetic事件仿真，再扩展
-需求分析页的闭环工作负载。完整OS、PHY训练、RTL/VIP联动和专用IP
+首版先实现硬件页的配置兼容、解析sizing、synthetic及gem5周期模型，
+通过M3周期/所选协议验收后进入M4 SimAI闭环集成。UI/schema准备可提前，
+SimAI执行不能以M2的预算模型代替该入口门；这项顺序不要求先完成M5
+所有可选产品功能。需求分析页进一步复用该闭环后端。完整OS、PHY训练、RTL/VIP联动和专用IP
 接口复现不是首版前置条件。详细协议模式仅宣称已测试的规范子集。
 
 ## 3. 协议约束与近似边界
@@ -105,7 +111,7 @@ payload。HTML中的64B RCB默认不证明XPU-to-XPU配置合法；严格模式�
 | F-19 | 实验计数与trace | 输出payload/TLP/FLIT估算/Cell、stall与队列峰值 |
 | F-20 | 离线JSON交换 | 保留现有workspace与hardware-calibration两种格式的区别 |
 | F-21 | 快照与结果绑定 | 修改输入后旧结果失效或仍绑定旧配置，不能误标为新结果 |
-| F-22 | workload适配 | 流量来源可追溯；估算流量不称闭环模型性能 |
+| F-22 | SimAI/SimCCL workload适配与闭环反馈 | 同一gem5周期数据面，流量/依赖/版本可追溯，拥塞影响任务完成；满足§12，估算/CSV不称闭环模型性能 |
 
 ### 4.3 Databook的补充细化，不扩大基础范围
 
@@ -124,6 +130,13 @@ DWC是Gen5单端口controller。以下保留F-23–F-32作为细化ID，除实�
 | F-30 | 本地NP发起预留Cpl header/data预算 | §3.23；本地Requester适用，transit不分配本地Tag |
 | F-31 | RX header/data/formation、retry及core SRAM独立计量 | §2.2、5.17–5.21；Gen6布局另定，不强制DWC RAM结构 |
 | F-32 | reset/INTx/PM/RAS跨端口协调 | P.4.3–P.5.1；系统扩展，首版明确缺失 |
+
+### 4.4 SimAI集成的必需范围
+
+B-06/F-22是M4的必需交付，不再仅以“后续适配”描述。§12的SIM-01–SIM-16
+给出可执行的功能、时序、生命周期与回归验收；不改变F-01–F-32或COMP
+编号。验证环境与expected先于每项实现，遵循原M0–M5计划的TDD要求。
+
 
 ## 5. 硬件页输入合同
 
@@ -363,7 +376,8 @@ profile后才报告闭环TTFT/TPOT/step时间。方案对比、验证记录、�
 3. T-03：复现参考事件口径与S-01–S-07；证明差异可解释。
 4. T-04：实现gem5有限资源timing及S-08，检查字节/Tag/信用/引用守恒。
 5. T-05：按条款完善FLIT/shared FC/replay和ordering测试；只声明实测覆盖。
-6. T-06：对接需求分析流量、对比和结果导入，保留现有离线能力。
+6. T-06：在gem5周期验收后接入SimAI/SimCCL闭环，再对接需求分析、对比
+   与结果导入；通过SIM-01–SIM-16，保留现有离线能力。
 7. T-07：需要时增加databook接口与配置/枚举细化；不倒置主次。
 8. T-08：物理Slice/bank/缓存等microarchitecture扫描，可校准但无预置PPA。
 9. T-09：多域、AI/CXL等扩展另立协议及验收合同。
@@ -437,6 +451,74 @@ ARCH（架构自定门槛）、SIM（待仿真冻结）；不能把所有目标�
 HTML默认配置与补充profile分别保存；加载竞品profile须显式选择，并显示
 相对默认输入的变化。不把90ns、250ns、4 Host/4 NTB、1KiB MPS等隐式
 覆盖到lab基线，也不通过固定输入延迟“证明”性能目标已达到。
+
+## 12. gem5周期模型后的SimAI仿真需求
+
+### 12.1 依据与必需闭环
+
+依据SimAI侧
+[PCIe6_Simulation_Architecture.md](/workspaces/SimAI/docs/pcie_switch/PCIe6_Simulation_Architecture.md)
+的统一实验描述、WorkloadIR/FlowIR、完成依赖与API集成方案，以及当前
+[AstraNetworkAPI.hh](/workspaces/SimAI/astra-sim-alibabacloud/astra-sim/system/AstraNetworkAPI.hh)
+和[SimCCL架构](/workspaces/SimAI/SimCCL/docs/design/architecture.md)。
+协议规则仍以§1的Base Spec为准；SimAI资料定义集成功能，不替代协议依据。
+
+必须实现：SimAI compute/communication DAG → SimCCL或显式collective
+算法 → 有依赖的FlowIR → 同一gem5 DMA/TLP/Link/Switch/Endpoint → 完成
+callback → 后续任务。SimAI调度workload，gem5执行PCIe时序；不复制
+SimAI提案中的第二套PCIe事件核心。集成实现见本地仿真架构§11。
+
+### 12.2 功能与验收矩阵
+
+所有SIM项均为集成阶段必需，不等于目前已实现。M3入口门与M4验收
+分别记录，未支持M5扩展不阻塞基础PCIe-only闭环。
+
+| ID | 必须满足的仿真要求 | 验收场景 / 阶段 |
+|---|---|---|
+| SIM-01 | SimAI执行前先验收gem5周期profile：解析TLP/cycle、bank/RAM、仲裁/Fabric/staging、时钟/CDC、Link/所选FC/replay/ordering；记录未支持项 | V-35及M3协议场景通过，M3-06冻结profile/hash；预算模型或仅编译不算通过 |
+| SIM-02 | 微基准和SimAI流量共用同一gem5端点/Link/Switch状态与实现，集成层只作匹配、流量映射、事件和结果适配 | V-30同配置/实际注入对照，无无法解释的路径/计数/时间差异；M4-06/08 |
+| SIM-03 | 实现PCIe AstraNetworkAPI backend，覆盖init/comm/rank/send/recv/time/schedule/finish及backend分支 | V-27/28/33/34，构建与运行明确选中PCIe；API调用与count/type到byte规则冻结 |
+| SIM-04 | 所有rank共用一个gem5时间与event queue；相对schedule、时间单位/分辨率、Tick换算与同Tick排序确定 | V-27；无逆因果、负delta/溢出静默处理或独立NS3/AnaSim时间；不以wall-clock推进 |
+| SIM-05 | 匹配区分communicator、src/dst、message tag、flow/channel/chunk或序号；支持recv先到/data先到与重复tag并发 | V-28，匹配恰好一次且不串流；消息tag不作PCIe Tag |
+| SIM-06 | 明确send源可复用、recv完整目的可见/匹配及应用同步完成；callback恰好一次、生命周期安全 | V-29/33，posted write不虚构Cpl；Read-pull方向正确且全部Cpl齐后完成；禁止callback过早推进依赖 |
+| SIM-07 | 有限DMA/待注入/匹配状态与上游注入窗口明确；不能假定SimAI会按sim_send返回值自动重试 | V-33容量与恢复场景；无无限payload队列、静默拒绝/丢流或无依据的提前完成 |
+| SIM-08 | FlowIR保存algorithm/protocol/channel/chunk、communicator、placement及predecessors；一flow到多请求/TLP可追溯 | V-28/31/32，flow→transaction→cycle trace身份/字节/依赖一致 |
+| SIM-09 | PCIe-only算法选择拒绝NVLS/NVSwitch专属路径；软件归约在端点计服务，不隐式启用Switch INC/广播 | V-31；2/8-rank Ring及显式Tree的阶段和字节正确；缺能力明确拒绝 |
+| SIM-10 | PCIe路径不继承NS3的RDMA/PFC/重传或NVLink/NET send_lat；如有端点启动成本须显式profile且避免重复计费 | V-30/31；独立空载/单流预算与逐段时延可核算；旧backend自身行为保留 |
+| SIM-11 | 网络排队/资源停顿反馈SimAI DAG；任务仅在其完成合同满足后释放，不能以入队替代完成 | V-32；受控拥塞/降带宽延迟相关通信及后继compute，字节/依赖守恒；M4-10 |
+| SIM-12 | 工作负载范围包括显式P2P/collective、MoE Dispatch/Combine及Train/Prefill/Decode/Diffusion的有依赖样例 | V-31/32各自fixture；先小规模再扩展；缺计算profile只输出通信指标，CSV无依赖只能称replay |
+| SIM-13 | 单透明star/树先验证，rank→endpoint/Function与地址窗口显式；级联/P2P按合法域转发，Host staging生成两段DMA及Host服务 | V-09/15/30/32；非法预算/不可达拒绝；mesh/Clos另有专用转发合同才启用 |
+| SIM-14 | 输出通信/collective/模型时间、吞吐、逐link热点与硬件stall/占用，并绑定两仓库/SimCCL版本、profile/seed/窗口/测点 | V-20/26/30/32；有compute才报step/TTFT/TPOT；输入Token/s不作达成值，重试字节不计有效量 |
+| SIM-15 | finish由共享runtime统一管理，全部rank及在途消息/callback/硬件资源按合同drain后退出；未匹配/超时显式报告 | V-33：错时finish不提前exit、无重复回调/幽灵完成，未完成量和失败原因可审计 |
+| SIM-16 | 独立PCIe构建入口与两仓库bridge可重现；保留Analytical/NS3原有选择/行为，不修改临时复制目录实现持久功能 | V-34；指定版本build/link/smoke及原backend基线回归，所有结果记录版本与dirty状态 |
+
+### 12.3 验收范围与场景补充
+
+先运行同硬件profile的P2P Read/Write、64B/4KiB和incast，证明adapter复用
+周期数据面；再运行2/8-rank Ring、显式Tree和小规模MoE Dispatch/Combine。
+Ring每rank有效发送量按`2×(N−1)/N×tensor_bytes`核对，Tree使用独立
+expected；数据/算法策略和端点归约成本固定，不混为INC硬件收益。
+
+Train、Prefill、Decode、Diffusion分别提供最小可重放DAG fixture，包含
+适用的compute、通信与场景依赖。MoE按token/专家/rank映射核对Dispatch/
+Combine总量；热点不能仅靠平均倍率替代。每个DAG以无争用/受控争用两组
+输入验证通信完成影响后继时刻；统计窗口/误差与compute输入来源预先声明。
+
+V-27–V-34是SimAI接口/闭环场景，V-35是其前置cycle验收。全部适用必需
+case无FAIL/skip/xfail、required bins全命中、数据/身份/资源错误为0；
+超时/缺能力/测点不可比单列，不静默删除未完成样本。参考HTML结果不得
+充当严格cycle模型或SimAI闭环的正确性oracle。
+
+### 12.4 交付状态与规模边界
+
+当前所有SIM项均未实现/未验收，文档更新不表示backend可用。交付包括
+两仓库版本化API/FlowIR/结果合同、可执行TDD场景、gem5 runtime facade、
+SimAI PcieNetwork/构建入口、collective/workload fixtures及回归报告。
+
+大规模可后续使用经周期模型校准的加速profile，但须独立标精度和适用
+范围，按消息大小/并发/Read-Write/拓扑/热点给出误差；只导出单一BW/
+latency标量不满足本节。首版无需1024卡全程逐FLIT，也无需先完成NTB、
+CXL、INC、完整OS或PHY电气模型才能交付基础SimAI闭环。
 
 ## 附录A：历史竞品资料记录（补充依据）
 

@@ -1,0 +1,180 @@
+{
+    "schema_version": 1,
+    "capabilities": {
+        "request_identity": {
+            "source": "Base Specification 6.0",
+            "section": "2.2.6.2",
+            "printed_page": 153,
+            "scenarios": [
+                "V-05",
+                "V-06",
+                "V-07"
+            ],
+            "milestone": "M2",
+            "implementation_status": "not_implemented",
+            "validation_scope": "planned",
+            "normative_behavior":
+                "Outstanding requests have unique Requester/Function/Tag identities; retire after complete response or defined failure.",
+            "reference_behavior":
+                "HTML aggregates per-Function budgets and uses fixed reference Tag ceilings.",
+            "unsupported":
+                "No requester execution, Tag allocation, or response matching in M0."
+        },
+        "memory_requests": {
+            "source": "Base Specification 6.0",
+            "section": "2.2.7",
+            "printed_page": 162,
+            "scenarios": [
+                "V-03",
+                "V-04"
+            ],
+            "milestone": "M2",
+            "implementation_status": "not_implemented",
+            "validation_scope": "planned",
+            "normative_behavior":
+                "Apply request-specific MPS/MRRS, byte enables, length and 4 KiB boundary rules.",
+            "reference_behavior":
+                "HTML uses adjustable header byte costs and simplified request plans.",
+            "unsupported":
+                "No TLP generation, byte-enable execution, AtomicOps or I/O transactions in M0."
+        },
+        "completion": {
+            "source": "Base Specification 6.0",
+            "section": "2.3.1.1/2.3.2",
+            "printed_page": 214,
+            "scenarios": [
+                "V-05",
+                "V-06"
+            ],
+            "milestone": "M2",
+            "implementation_status": "not_implemented",
+            "validation_scope": "planned",
+            "normative_behavior":
+                "Validate status, Byte Count, Lower Address, increasing data addresses and full request coverage.",
+            "reference_behavior":
+                "HTML selects MPS-filled or RCB-boundary segments, with idealized completion service.",
+            "unsupported":
+                "No completion assembly or protocol error execution in M0."
+        },
+        "rcb_role": {
+            "source": "Base Specification 6.0",
+            "section": "2.3.1.1",
+            "printed_page": 214,
+            "scenarios": [
+                "V-08"
+            ],
+            "milestone": "M0/M2",
+            "implementation_status": "not_implemented",
+            "validation_scope": "configuration_only",
+            "normative_behavior":
+                "rcb_role identifies the System Element receiving the Read Completions: RC permits 64/128 B, endpoint requires 128 B.",
+            "reference_behavior":
+                "HTML retains RCB 64/128 without a receiver role; reference mode preserves either choice.",
+            "unsupported":
+                "Configuration constraint only; mixed roles, bridge-specific paths and runtime split validation are not implemented."
+        },
+        "ordering": {
+            "source": "Base Specification 6.0",
+            "section": "2.4",
+            "printed_page": 222,
+            "scenarios": [
+                "V-10"
+            ],
+            "milestone": "M2/M3",
+            "implementation_status": "not_implemented",
+            "validation_scope": "planned",
+            "normative_behavior":
+                "Arbitrate only within permitted class/attribute/identity ordering and forward-progress relations.",
+            "reference_behavior":
+                "HTML uses FIFO aggregate Fabric service, not a complete ordering matrix.",
+            "unsupported":
+                "No runtime ordering, RO/IDO, Atomic or deadlock proof in M0."
+        },
+        "virtual_channels": {
+            "source": "Base Specification 6.0",
+            "section": "2.5",
+            "printed_page": 229,
+            "scenarios": [
+                "V-10",
+                "V-17"
+            ],
+            "milestone": "M2/M3",
+            "implementation_status": "not_implemented",
+            "validation_scope": "planned",
+            "normative_behavior":
+                "TC-to-VC mapping and receive/transmit resources are distinct from physical channels.",
+            "reference_behavior":
+                "HTML divides H/D estimates uniformly across vc and counts logical VOQs.",
+            "unsupported":
+                "No runtime TC mapping, VC arbitration or flow control in M0."
+        },
+        "flow_control": {
+            "source": "Base Specification 6.0",
+            "section": "2.6",
+            "printed_page": 235,
+            "scenarios": [
+                "V-13",
+                "V-17"
+            ],
+            "milestone": "M2/M3",
+            "implementation_status": "not_implemented",
+            "validation_scope": "planned",
+            "normative_behavior":
+                "Flit transmitters declare Shared FC support; receiver support is optional. Declaration does not imply modeled execution.",
+            "reference_behavior":
+                "HTML returns credit on an ideal timer; TLP-budget execution will explicitly label FC approximations.",
+            "unsupported":
+                "No dedicated/shared accounting, initialization, counter wrap or update events in M0."
+        },
+        "flit_layout_replay": {
+            "source": "Base Specification 6.0",
+            "section": "4.2.3.3",
+            "printed_page": 351,
+            "scenarios": [
+                "V-16",
+                "V-18"
+            ],
+            "milestone": "M3",
+            "implementation_status": "not_implemented",
+            "validation_scope": "planned",
+            "normative_behavior":
+                "Use 256-byte FLIT layout; retain protected TLP information and update DLP on retry without duplicate delivery.",
+            "reference_behavior":
+                "HTML uses 236/256 times packing and replay-window bandwidth limiting.",
+            "unsupported":
+                "No FLIT encoding, FEC, ACK/NAK, replay state machine or PHY execution in M0."
+        },
+        "simai_integration": {
+            "source": "local requirements",
+            "section": "requirements:12",
+            "printed_page": null,
+            "scenarios": [
+                "V-27",
+                "V-28",
+                "V-29",
+                "V-30",
+                "V-31",
+                "V-32",
+                "V-33",
+                "V-34",
+                "V-35"
+            ],
+            "milestone": "M3/M4",
+            "implementation_status": "not_implemented",
+            "validation_scope": "planned",
+            "normative_behavior":
+                "Integrate AstraNetworkAPI after the gem5 cycle profile passes M3; share hardware runtime and causal completion feedback.",
+            "reference_behavior":
+                "HTML only exports sizing/calibration estimates; it is not a closed-loop SimAI backend.",
+            "unsupported":
+                "No SimAI backend, runtime bridge, callbacks or workload execution in M0."
+        }
+    },
+    "limitations": [
+        "No protocol execution or cycle backend exists in M0.",
+        "Reference Tag ceilings are not universal legal Tag sets.",
+        "Topology validates uniform root-to-endpoint switch counts; physical port/lane mapping and addresses remain unresolved.",
+        "RX/data/descriptor minima do not prove complete credit or core backing.",
+        "Errata/ECN coverage must be verified before claiming compliance."
+    ]
+}

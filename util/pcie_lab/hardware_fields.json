@@ -1,0 +1,604 @@
+{
+    "op": {
+        "label": "事务类型",
+        "group": "负载与事务",
+        "default": "read",
+        "enum": [
+            "read",
+            "write"
+        ],
+        "condition": "all"
+    },
+    "payload": {
+        "label": "每笔应用传输 (B)",
+        "group": "负载与事务",
+        "default": 64,
+        "minimum": 4,
+        "maximum": 1048576,
+        "step": 4,
+        "condition": "all"
+    },
+    "target": {
+        "label": "每发起端口目标 Payload (GB/s)",
+        "group": "负载与事务",
+        "default": 128,
+        "minimum": 0.001,
+        "maximum": 100000,
+        "step": 0.001,
+        "condition": "all"
+    },
+    "offset": {
+        "label": "起始地址 4 KiB 页内偏移 (B)",
+        "group": "负载与事务",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 4092,
+        "step": 4,
+        "condition": "all"
+    },
+    "mrrs": {
+        "label": "MRRS (B)",
+        "group": "负载与事务",
+        "default": 4096,
+        "enum": [
+            128,
+            256,
+            512,
+            1024,
+            2048,
+            4096
+        ],
+        "condition": "read"
+    },
+    "mps": {
+        "label": "MPS (B)",
+        "group": "负载与事务",
+        "default": 256,
+        "enum": [
+            128,
+            256,
+            512,
+            1024,
+            2048,
+            4096
+        ],
+        "condition": "all"
+    },
+    "rcb": {
+        "label": "RCB (B)",
+        "group": "负载与事务",
+        "default": 64,
+        "enum": [
+            64,
+            128
+        ],
+        "condition": "read"
+    },
+    "cplSplit": {
+        "label": "Completion 策略",
+        "group": "负载与事务",
+        "default": "mps",
+        "enum": [
+            "mps",
+            "rcb"
+        ],
+        "condition": "read"
+    },
+    "reqHeader": {
+        "label": "请求 TLP 开销 (B)",
+        "group": "负载与事务",
+        "default": 16,
+        "minimum": 12,
+        "maximum": 128,
+        "step": 4,
+        "condition": "all"
+    },
+    "cplHeader": {
+        "label": "Completion TLP 开销 (B)",
+        "group": "负载与事务",
+        "default": 12,
+        "minimum": 12,
+        "maximum": 128,
+        "step": 4,
+        "condition": "read"
+    },
+    "packing": {
+        "label": "FLIT TLP 区填充率 (%)",
+        "group": "负载与事务",
+        "default": 100,
+        "minimum": 1,
+        "maximum": 100,
+        "step": 0.1,
+        "condition": "all"
+    },
+    "rate": {
+        "label": "FLIT Mode 链路速率 (GT/s)",
+        "group": "链路与端口",
+        "default": 64,
+        "enum": [
+            16,
+            32,
+            64
+        ],
+        "condition": "all"
+    },
+    "reqPorts": {
+        "label": "活跃发起端口",
+        "group": "链路与端口",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 32,
+        "step": 1,
+        "condition": "all"
+    },
+    "cplPorts": {
+        "label": "活跃响应端口",
+        "group": "链路与端口",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 32,
+        "step": 1,
+        "condition": "all"
+    },
+    "reqLanes": {
+        "label": "发起端链宽",
+        "group": "链路与端口",
+        "default": 16,
+        "enum": [
+            1,
+            2,
+            4,
+            8,
+            16
+        ],
+        "condition": "all"
+    },
+    "cplLanes": {
+        "label": "响应端链宽",
+        "group": "链路与端口",
+        "default": 16,
+        "enum": [
+            1,
+            2,
+            4,
+            8,
+            16
+        ],
+        "condition": "all"
+    },
+    "switches": {
+        "label": "路径经过的 Switch 数",
+        "group": "链路与端口",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 8,
+        "step": 1,
+        "condition": "all"
+    },
+    "islLanes": {
+        "label": "级联链宽",
+        "group": "链路与端口",
+        "default": 16,
+        "enum": [
+            1,
+            2,
+            4,
+            8,
+            16
+        ],
+        "condition": "cascade"
+    },
+    "chipLanes": {
+        "label": "单颗 IP SerDes lanes",
+        "group": "链路与端口",
+        "default": 144,
+        "minimum": 1,
+        "maximum": 2048,
+        "step": 1,
+        "condition": "all"
+    },
+    "chipPorts": {
+        "label": "单颗 IP 逻辑端口",
+        "group": "链路与端口",
+        "default": 9,
+        "minimum": 2,
+        "maximum": 256,
+        "step": 1,
+        "condition": "all"
+    },
+    "reqMeters": {
+        "label": "发起端链路长度 (m)",
+        "group": "长度与延迟",
+        "default": 0.5,
+        "minimum": 0,
+        "maximum": 1000,
+        "step": 0.001,
+        "condition": "all"
+    },
+    "cplMeters": {
+        "label": "响应端链路长度 (m)",
+        "group": "长度与延迟",
+        "default": 0.5,
+        "minimum": 0,
+        "maximum": 1000,
+        "step": 0.001,
+        "condition": "all"
+    },
+    "islMeters": {
+        "label": "每段级联链路长度 (m)",
+        "group": "长度与延迟",
+        "default": 0.5,
+        "minimum": 0,
+        "maximum": 1000,
+        "step": 0.001,
+        "condition": "cascade"
+    },
+    "nsMeter": {
+        "label": "单向传播延迟 (ns/m)",
+        "group": "长度与延迟",
+        "default": 5,
+        "minimum": 0.001,
+        "maximum": 1000,
+        "step": 0.001,
+        "condition": "all"
+    },
+    "retimers": {
+        "label": "每段链路 Retimer 数",
+        "group": "长度与延迟",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 8,
+        "step": 1,
+        "condition": "all"
+    },
+    "retimerNs": {
+        "label": "每 Retimer 单向延迟 (ns)",
+        "group": "长度与延迟",
+        "default": 10,
+        "minimum": 0,
+        "maximum": 10000,
+        "step": 0.01,
+        "condition": "all"
+    },
+    "switchNs": {
+        "label": "单次 Switch 穿越 (ns)",
+        "group": "长度与延迟",
+        "default": 60,
+        "minimum": 0,
+        "maximum": 100000,
+        "step": 0.01,
+        "condition": "all"
+    },
+    "endpointNs": {
+        "label": "端点处理及其余延迟预算 (ns)",
+        "group": "长度与延迟",
+        "default": 120,
+        "minimum": 0,
+        "maximum": 100000,
+        "step": 0.01,
+        "condition": "all"
+    },
+    "rttMode": {
+        "label": "事务 RTT 口径",
+        "group": "长度与延迟",
+        "default": "derived",
+        "enum": [
+            "derived",
+            "fixed"
+        ],
+        "condition": "read"
+    },
+    "fixedRtt": {
+        "label": "手动事务 RTT (ns)",
+        "group": "长度与延迟",
+        "default": 250,
+        "minimum": 1,
+        "maximum": 1000000,
+        "step": 0.01,
+        "condition": "fixed"
+    },
+    "creditFixed": {
+        "label": "Credit 环路固定延迟 (ns)",
+        "group": "长度与延迟",
+        "default": 180,
+        "minimum": 1,
+        "maximum": 1000000,
+        "step": 0.01,
+        "condition": "all"
+    },
+    "ackFixed": {
+        "label": "ACK 环路固定延迟 (ns)",
+        "group": "长度与延迟",
+        "default": 180,
+        "minimum": 1,
+        "maximum": 1000000,
+        "step": 0.01,
+        "condition": "all"
+    },
+    "functions": {
+        "label": "每发起端口的均分 Function 数",
+        "group": "Tag、Credit 与 Replay",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 256,
+        "step": 1,
+        "condition": "read"
+    },
+    "tagBits": {
+        "label": "Tag 字段位宽",
+        "group": "Tag、Credit 与 Replay",
+        "default": 10,
+        "enum": [
+            5,
+            8,
+            10,
+            14
+        ],
+        "condition": "read"
+    },
+    "tagBudget": {
+        "label": "每 Function 实际可用 Tag",
+        "group": "Tag、Credit 与 Replay",
+        "default": 768,
+        "minimum": 1,
+        "maximum": 16384,
+        "step": 1,
+        "condition": "read"
+    },
+    "trackMode": {
+        "label": "Switch 跟踪范围",
+        "group": "Tag、Credit 与 Replay",
+        "default": "transparent",
+        "enum": [
+            "transparent",
+            "proxy"
+        ],
+        "condition": "read"
+    },
+    "trackExtra": {
+        "label": "跟踪表附加字段 (bit/entry)",
+        "group": "Tag、Credit 与 Replay",
+        "default": 32,
+        "minimum": 0,
+        "maximum": 512,
+        "step": 1,
+        "condition": "read"
+    },
+    "requestLimit": {
+        "label": "每发起端口请求率上限 (MTLP/s，0=不限)",
+        "group": "Tag、Credit 与 Replay",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 100000,
+        "step": 0.01,
+        "condition": "all"
+    },
+    "cplLimit": {
+        "label": "每响应端口 Cpl 速率上限 (MTLP/s，0=不限)",
+        "group": "Tag、Credit 与 Replay",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 100000,
+        "step": 0.01,
+        "condition": "read"
+    },
+    "margin": {
+        "label": "资源裕量 (%)",
+        "group": "Tag、Credit 与 Replay",
+        "default": 20,
+        "minimum": 0,
+        "maximum": 400,
+        "step": 0.1,
+        "condition": "all"
+    },
+    "headerCredits": {
+        "label": "每 VC 每类别 H 窗口 (0=自动)",
+        "group": "Tag、Credit 与 Replay",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 65536,
+        "step": 1,
+        "condition": "all"
+    },
+    "dataCredits": {
+        "label": "每 VC 每类别 D 窗口 (0=自动)",
+        "group": "Tag、Credit 与 Replay",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 1048576,
+        "step": 1,
+        "condition": "all"
+    },
+    "replayFlits": {
+        "label": "每端口 TX Replay 深度 (FLIT，0=自动)",
+        "group": "Tag、Credit 与 Replay",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 1048576,
+        "step": 1,
+        "condition": "all"
+    },
+    "clock": {
+        "label": "数据面频率 (MHz)",
+        "group": "交换数据面",
+        "default": 1000,
+        "minimum": 1,
+        "maximum": 20000,
+        "step": 1,
+        "condition": "all"
+    },
+    "util": {
+        "label": "内部有效利用率 (%)",
+        "group": "交换数据面",
+        "default": 85,
+        "minimum": 1,
+        "maximum": 100,
+        "step": 0.1,
+        "condition": "all"
+    },
+    "channels": {
+        "label": "每端口每方向 IP 物理通道",
+        "group": "交换数据面",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 32,
+        "step": 1,
+        "condition": "all"
+    },
+    "portWidth": {
+        "label": "每物理通道位宽 (bit，0=自动)",
+        "group": "交换数据面",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 65536,
+        "step": 32,
+        "condition": "all"
+    },
+    "slices": {
+        "label": "Crossbar / Fabric 并行 Slice",
+        "group": "交换数据面",
+        "default": 9,
+        "minimum": 1,
+        "maximum": 256,
+        "step": 1,
+        "condition": "all"
+    },
+    "fabricWidth": {
+        "label": "每 Slice 位宽 (bit，0=自动)",
+        "group": "交换数据面",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 65536,
+        "step": 32,
+        "condition": "all"
+    },
+    "vc": {
+        "label": "每端口 VC 数",
+        "group": "交换数据面",
+        "default": 2,
+        "minimum": 1,
+        "maximum": 8,
+        "step": 1,
+        "condition": "all"
+    },
+    "cell": {
+        "label": "内部 Cell 数据区 (B)",
+        "group": "交换数据面",
+        "default": 64,
+        "enum": [
+            64,
+            128,
+            256
+        ],
+        "condition": "all"
+    },
+    "meta": {
+        "label": "每 Cell 元数据 (B)",
+        "group": "交换数据面",
+        "default": 8,
+        "minimum": 0,
+        "maximum": 128,
+        "step": 1,
+        "condition": "all"
+    },
+    "fabricCreditNs": {
+        "label": "片内 Fabric 槽位返回 (ns)",
+        "group": "交换数据面",
+        "default": 40,
+        "minimum": 1,
+        "maximum": 1000000,
+        "step": 0.01,
+        "condition": "all"
+    },
+    "egressCells": {
+        "label": "每出口每 VC 暂存 (Cell，0=自动)",
+        "group": "交换数据面",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 1048576,
+        "step": 1,
+        "condition": "all"
+    },
+    "voqDepth": {
+        "label": "每活跃 VOQ 的 Cell 额度 (0=自动)",
+        "group": "交换数据面",
+        "default": 0,
+        "minimum": 0,
+        "maximum": 65536,
+        "step": 1,
+        "condition": "all"
+    },
+    "activeVoq": {
+        "label": "每入口支持活跃 VOQ 数",
+        "group": "交换数据面",
+        "default": 8,
+        "minimum": 1,
+        "maximum": 4096,
+        "step": 1,
+        "condition": "all"
+    },
+    "descriptor": {
+        "label": "每 VOQ Descriptor (B)",
+        "group": "交换数据面",
+        "default": 32,
+        "minimum": 8,
+        "maximum": 512,
+        "step": 1,
+        "condition": "all"
+    },
+    "poolKiB": {
+        "label": "每入口共享 Payload 池 (KiB，0=自动)",
+        "group": "交换数据面",
+        "default": 128,
+        "minimum": 0,
+        "maximum": 1048576,
+        "step": 1,
+        "condition": "all"
+    },
+    "burst": {
+        "label": "分析突发倍率",
+        "group": "交换数据面",
+        "default": 2,
+        "minimum": 1,
+        "maximum": 100,
+        "step": 0.1,
+        "condition": "all"
+    },
+    "burstNs": {
+        "label": "分析突发窗口 (ns)",
+        "group": "交换数据面",
+        "default": 250,
+        "minimum": 0,
+        "maximum": 1000000,
+        "step": 1,
+        "condition": "all"
+    },
+    "sramFactor": {
+        "label": "SRAM ECC / 对齐附加 (%)",
+        "group": "交换数据面",
+        "default": 12.5,
+        "minimum": 0,
+        "maximum": 100,
+        "step": 0.1,
+        "condition": "all"
+    },
+    "simUs": {
+        "label": "仿真时长 (µs)",
+        "group": "仿真参数",
+        "default": 12,
+        "minimum": 1,
+        "maximum": 100,
+        "step": 1,
+        "condition": "all"
+    },
+    "simArrival": {
+        "label": "仿真发包节奏",
+        "group": "仿真参数",
+        "default": "steady",
+        "enum": [
+            "steady",
+            "burst"
+        ],
+        "condition": "all"
+    }
+}

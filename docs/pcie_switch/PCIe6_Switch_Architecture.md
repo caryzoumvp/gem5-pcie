@@ -1,11 +1,16 @@
 # PCIe 6.0 Switch 架构设计
 
 版本：v1.0｜日期：2026-11-17｜状态：待实现的架构，不含性能验证结论。
-依据[需求v0.9](PCIe6_Switch_Requirements.md)；软件执行合同见
+依据[需求v1.0](PCIe6_Switch_Requirements.md)；软件执行合同见
 [仿真架构](PCIe6_Simulation_Architecture.md)，交付顺序见
 [实施计划](PCIe6_Implementation_Plan.md)。
 
 ## 1. 决策与适用范围
+
+TDD仅规定开发方法：为下述模块和功能先定义验证场景与退出标准，再实现
+并回归。gem5 Switch架构、资源所有权及实施计划M0–M5保持不变；不采用
+函数→SystemC→RTL降低路线。测试合同见
+[验证场景](PCIe6_Validation_Scenarios.md)。
 
 PCIe Base Specification 6.0决定协议行为，HTML实验台决定功能、输入和
 输出，DWC databook补充controller实现边界；竞品资料提供候选规格。
@@ -179,3 +184,16 @@ DWC v5.71a为Gen5参考，不能证明Gen6 FLIT/FC行为。当前工作区未发
 [实施计划](PCIe6_Implementation_Plan.md)是阶段、依赖与完成证据的唯一
 排期来源。资源守恒、有限反压、数据正确性和排空先于性能对比；完整协议
 签核、PHY/PPA和未实现扩展不因文档验收而自动完成。
+
+## 10. SimAI作为周期模型上层工作负载
+
+本节实现需求§12的SIM-01–SIM-16，M3周期门与M4闭环分别验收。
+
+gem5周期级端口/bank/仲裁/Fabric/Link及Completion模型先通过M3验收，
+再由M4接入SimAI/SimCCL。上层只生成带依赖的flow，经同一DMA/TLP入口
+驱动本架构；不得在SimAI另写固定时延Switch或复制一套credit/replay。
+
+AstraNetworkAPI适配、消息匹配、共同事件时间和callback合同见仿真架构
+§11。微基准与workload共用硬件资源路径，归约默认发生端点，PCIe-only
+不自动启用NVLS/INC。M4的因果闭环检查要求拥塞真实延迟后继任务，
+不是把gem5吞吐标量导入SimAI就称完成集成。

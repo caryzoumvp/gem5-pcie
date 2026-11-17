@@ -1,11 +1,15 @@
 # PCIe 6.0 Switch gem5 仿真架构
 
-版本：v1.0｜日期：2026-11-17｜状态：待实现方案，无仿真结果。
-依据[需求v0.9](PCIe6_Switch_Requirements.md)，硬件资源见
+版本：v1.0｜日期：2026-11-17｜状态：M0 host配置合同已实现；数据面待实现，无仿真结果。
+依据[需求v1.0](PCIe6_Switch_Requirements.md)，硬件资源见
 [Switch架构](PCIe6_Switch_Architecture.md)，阶段与证据见
 [实施计划](PCIe6_Implementation_Plan.md)。
 
 ## 1. 执行模型与配置维度
+
+TDD不改变本架构：先为具体实现任务构造输入、expected/checker与退出
+条件，再实现gem5组件并回归。[场景目录](PCIe6_Validation_Scenarios.md)
+是测试设计，实施计划M0–M5是功能交付顺序；不以模型降低流程替换二者。
 
 Base Spec 6.0定义协议，HTML定义功能和参考行为；databook是实现补充，
 竞品spec是独立目标层。gem5是时序执行内核，不新增并行推进的独立时钟。
@@ -197,3 +201,264 @@ tests/gem5/pcie/           # TestLib回归
 有限资源；TestLib验证端到端和JSON；FLIT条款用独立expected traces，
 参考JS仅做参考语义oracle，不作为严格协议oracle。实际命令和证据在
 [实施计划](PCIe6_Implementation_Plan.md)登记，未运行不标通过。
+
+## 10. 关键实现算法与TDD观察点
+
+以下补充具体数据面实现，不增加新的实现层级或替换前述模块。
+
+### 10.1 请求与完成路径
+
+1. TrafficSource生成应用传输；Requester按MPS/MRRS/4KiB拆分。每个
+   MemRd预留Tag及相应Cpl接收预算，保留父应用/片段映射。
+2. Link发送资格同时检查方向串行化状态、对端FC和所选replay模型；
+   接收进入有backing的RX队列。TLP预算和详细FLIT各自声明事件粒度。
+3. S/F校验成功后route lookup选择出口，Order Engine产生eligible；
+   Admission原子预留core sector/descriptor，再接受RX→core转移。
+4. VOQ保存descriptor与payload引用，Scheduler被入队、资源释放或服务
+   完成事件唤醒。联合检查bank/Fabric/staging，失败保留队头及原因。
+5. grant后生成有限服务完成事件；出口取得保护副本后才释放入口引用。
+   TX按链路资源发送，确认/recovery事件释放相应replay状态。
+6. Completer生成反向CplD，同样经过各跳资源。Requester检查身份、范围、
+   状态与重组进度，最后一片到齐后释放Tag，父应用所需片段全齐才完成。
+
+每步提供接受/提交/释放trace。TDD分别注入容量耗尽、错误身份、返回乱序
+或重试等条件，检查没有部分预留泄漏、重复提交及过早完成。
+
+### 10.2 唤醒、顺序与排空
+
+每个阻塞队列记录所等待资源；资源状态转换只唤醒有关仲裁/发送事件。
+同一资源的调度事件有pending状态，避免重复安排同Tick grant。credit
+返回、staging释放、bank完成与新入队的平局顺序固定并进入回归合同。
+
+公共资源断言分别检查used/reserved/free及在途所有权；队列峰值不是
+有限容量执行的替代。drain先停止新应用注入，继续处理请求/Cpl/FC/ACK
+事件，直到队列、未完成表和保护副本达到该profile定义的空闲条件。
+等待超过场景预算输出原因/等待图，不强行释放资源以伪装排空。
+
+### 10.3 每项实现的最小测试单元
+
+分段、route、eligible、allocator和RR选择可先用独立函数/GTest验证；
+这些是同一gem5实现的单元测试边界，不是必须先开发另一套整机模型。
+Packet retry、事件顺序、跨组件反压和完成点使用小型gem5 timing测试；
+HTML参考与协议expected分别来自页面oracle和规范fixture。
+
+阶段退出规则及具体V-ID集中于实施计划/场景文档。实现和测试都围绕
+本架构的端点、Link、RX/core、VOQ/Fabric、staging/replay和adapter展开。
+
+## 11. gem5周期模型验收后的SimAI集成
+
+规范性集成需求见需求文档§12的SIM-01–SIM-16；本节定义如何实现。
+
+### 11.1 参考与分工
+
+已阅读SimAI侧
+[PCIe6_Simulation_Architecture.md](/workspaces/SimAI/docs/pcie_switch/PCIe6_Simulation_Architecture.md)
+及其§4/5/8/10，并核对当前
+[AstraNetworkAPI.hh](/workspaces/SimAI/astra-sim-alibabacloud/astra-sim/system/AstraNetworkAPI.hh)、
+NS3前端和SimCCL架构。该文档提出的统一实验描述、FlowIR、完成依赖和
+分级校准保留；其中“独立pcie-sim事件库”在本项目由已验证的gem5模型
+承担，不再另做一套Switch/credit/replay实现。
+
+| 层 | 负责内容 | 不负责内容 |
+|---|---|---|
+| SimAI | 模型/compute与通信依赖、rank、任务推进 | 不直接操纵PCIe信用、VOQ或TLP Tag |
+| SimCCL | collective算法、channel/chunk/flow与依赖 | 不是实际GPU kernel，不替代PCIe数据面 |
+| `PcieNetwork`（计划） | AstraNetworkAPI、消息匹配、FlowIR、callback生命周期 | 不拥有独立网络时间/独立Switch模型 |
+| gem5 PCIe runtime | DMA/TLP、端点、Link、Switch、FC/replay、周期争用 | 不用固定带宽公式替代实际资源服务 |
+| result adapter | workload/flow/transaction/cycle trace关联 | 不把估算、cycle模型和实测混标 |
+
+当前API的BackendType为NotSpecified/Garnet/NS3/Analytical，无PCIe；
+实际方法名为`sim_get_time`。SimCCL flowTag已有algorithm/protocol/channel/
+chunk等字段，算法可能依赖NVSwitch能力，NS3路径存在send_lat表。
+这些是本次源码核查结果，不表示PCIe adapter已存在。
+
+### 11.2 顺序与周期验收门
+
+M0–M3继续实现和验证gem5模型。M2的TLP预算/有限资源通过只是基础门；
+M3另加周期合同验收：端口解析TLP/cycle、bank读写、仲裁周期、Fabric/
+staging、时钟与CDC、占用/释放边沿有独立expected traces。所选FLIT/FC/
+replay覆盖及小规模无错/注错场景通过后，冻结cycle profile与source hash。
+这不要求完整PHY/全部可选协议合规，但所有未支持项必须显式列出。
+
+SimAI接入执行须在上述门通过后。M4的JSON/UI准备可先做；不在预算模型
+阶段就把接口通了称为“已集成cycle-level SimAI”。也不等待全部M5可选
+产品功能才做基本PCIe-only workload。
+
+### 11.3 数据和时序闭环
+
+```mermaid
+flowchart TB
+  AI[SimAI compute / communication DAG] --> CCL[SimCCL / 显式算法]
+  CCL --> FLOW[FlowIR / 消息匹配 / 传输映射]
+  FLOW --> DMA[同一套gem5 DMA / TLP入口]
+  DMA --> HW[已验收周期Link / Switch / Endpoint]
+  HW --> DONE[源资源释放 / 目的可见 / 完成事件]
+  DONE --> CB[AstraNetworkAPI callbacks]
+  CB --> AI
+```
+
+所有rank的PcieNetwork共享一个runtime、topology与gem5 event queue。
+先采用单进程、单事件驱动执行，gem5 runner负责初始化、驱动、drain与退出；
+SimAI计算/控制事件也通过`sim_schedule`进入同一队列，不运行NS3/AnaSim
+来独立推进本次PCIe实验。多进程/分布式同步不作为首版集成条件。
+
+`sim_get_time`、`sim_schedule(delta)`和`sim_time_resolution`声明一致
+单位；当前API有SE/MS/US/NS/FS枚举而无PS。adapter显式填写返回单位，
+按调用链审查建立转换，内部整数Tick/ps转换要处理舍入/溢出/负delta。
+现有前端部分调用只使用time_val，不能照抄而假设time_res始终有效。
+同Tick callback稳定排序，经gem5事件延后调用，避免inline重入破坏DAG状态。
+
+### 11.4 API与完成合同
+
+| API | 实现合同 |
+|---|---|
+| `get_backend_type` | 增加PCIe枚举并审查QueueLevelHandler及backend分支，保持已有backend兼容 |
+| `sim_init/sim_comm_size` | 验证共享runtime、rank/communicator、endpoint映射与地址窗口 |
+| `sim_send` | 保存message/flow身份及callback；明确count/type到byte的规则；映射到有界DMA入口 |
+| `sim_recv` | 注册匹配意图；支持recv先到或数据先到；不能每次调用都另造一份网络流量 |
+| `sim_get_time/sim_schedule` | 共享gem5时间、相对事件与确定排序，保证因果不回退 |
+| `sim_finish` | 每rank完成登记；全部rank和callback/队列满足drain合同后统一退出，不因一rank结束退出进程 |
+
+匹配键至少含communicator、src/dst、消息tag、channel/chunk/flow或稳定序号；
+相同tag重复/并发采用FIFO或显式sequence合同。消息tag不作PCIe Tag。
+必须复制需要持久化的元数据并明确buffer/request/callback arg的生命周期，
+不能长期保存指向调用栈或临时flowTag的引用。
+
+当前调用链不能假定会因sim_send返回值而自动重试。adapter的等待状态
+和DMA容量有界，满时必须通过明确的上游注入窗口控制；未能提供容量
+合同则拒绝配置/显式失败，不能静默丢请求或新增无限pending payload队列。
+消息匹配记录与硬件接收信用分账，recv登记不消耗虚构TLP资源。
+
+send callback按transport声明的源buffer可复用时刻触发；recv callback
+必须等待全消息目的可见且匹配成立。源接管不等于远端完成，posted write
+不虚构网络Cpl。read-pull由目的端发MemRd并等全部CplD，方向不能颠倒。
+每份callback恰好一次，DAG依赖在其要求的接收/同步完成点释放。
+
+count/type的byte语义、调用者对send callback的依赖及partial matching
+必须先按SimAI调用链验证，再冻结API合同；不能直接照搬NS3 hash表键。
+端点服务可用抽象内存与确定地址窗口，无须真实GPU内存；验证数据正确性
+时使用pattern/checksum fixture，性能运行的abstract-payload模式单独标记。
+
+### 11.5 SimCCL、拓扑与延迟
+
+保留FlowIR的算法/protocol/channel/chunk、predecessors、communicator与
+placement；单个chunk可拆多个应用请求/TLP，不丢失父子映射。
+PCIe-only禁止自动选NVLS/NVSwitch依赖路径；Ring/Tree在端点执行归约，
+需要其服务成本，普通Switch不因collective类型自动获得INC能力。
+
+绕过NS3 NVLink/NET send_lat和RDMA/PFC等机制；端点启动开销如需保留，
+放入显式可校准的PCIe端点profile，避免与gem5 DMA/Link时延双计。
+star/树先验收；CPU staging要生成两段DMA与Host服务；mesh/Clos仍需
+专用域/转发合同，不因SimAI生成图就取得标准透明PCIe合法性。
+
+先用同配置P2P/Read/Write和incast证明adapter未改变硬件路径，再运行
+小规模Ring AllReduce、MoE Dispatch/Combine，之后接Train/Prefill/Decode/
+Diffusion DAG。有完整依赖才称闭环；仅CSV flow replay只报告通信结果。
+
+### 11.6 两仓库实现与扩展边界
+
+拟gem5侧增加runtime facade和SimAI桥接入口，暴露register endpoint、
+submit flow、schedule callback、query time、drain/report；实现复用同一
+PcieLink/Switch/Endpoint及资源状态。不要通过CMake重新复制一个pcie-sim。
+
+拟SimAI侧新增`network_frontend/pcie/PcieNetwork.*`、入口/构建模式和
+BackendType分支。SCons与CMake由小型link/smoke场景验证边界；固定两库
+commit与SimCCL版本，不修改构建临时复制目录作为持久实现。
+本次只更新gem5工作区文档，未修改SimAI仓库或创建上述源文件。
+
+大规模默认不能将单一空载BW/latency表视作cycle模拟替代。后续加速后端
+需按大小、并发、Read/Write、拓扑和热点校准，并标独立精度；小场景同源
+cycle runtime仍保留作对照，不把1024卡逐FLIT作为首版集成门槛。
+
+## 12. 关键模块状态与通信合同（M0冻结、M2/M3实现）
+
+### 12.1 公共对象与状态机
+
+所有ID为runtime内稳定整数；`application_id`关联业务传输，`request_id`
+标识MemRd/MemWr，`descriptor_id`标识Switch本地存储，三者不复用PCIe Tag。
+事务对象持有不可变header/payload引用和必要metadata，队列只持descriptor。
+
+| 对象 | 必需字段 | 所有权/生命周期 |
+|---|---|---|
+| RequestRecord | requester/function/tag、address/bytes、父ID、expected/received ranges、status | Requester持有；完整/失败收束后归还Tag/Cpl预算 |
+| ForwardDescriptor | ingress/egress、VC/class/order-domain、store handle、valid bytes、route epoch | Admission创建，VOQ/Fabric/egress唯一移交；最终引用释放销毁 |
+| Reservation | pool ID、object ID、generation、units、state | `reserved→committed→released`；失败仅`reserved→cancelled`；禁止重复commit/release |
+| TransferGrant | source descriptor、出口/服务槽、bank/Fabric/staging reservations、completion tick | 一次grant唯一消费；全部资源取得后才创建 |
+| FlowCompletion | flow/application ID、源可复用/目的可见/接收完成类别、status、tick | runtime统一发事件；callback注册者负责消费一次 |
+
+Request状态为waiting-for-budget→issued→collecting→complete/failed；
+forward状态为rx-protected→core-queued→granted→egress-protected→retired。
+错误路径必须说明由谁保留最后副本及失败通知，不能通过删除队头隐式失败。
+
+### 12.2 接口边界和回压
+
+以下为计划C++接口语义，不是已存在代码。`TryResult`区分Accepted、
+Blocked(reason, wake_source)和Error(code)。Blocked不取得调用者对象，
+不留下永久资源；Accepted恰好一次取得所有权。协议错误不可当成Blocked。
+
+| 生产者→消费者 | 接口/载荷 | 接受/释放合同 |
+|---|---|---|
+| TrafficSource→Requester | `tryIssue(ApplicationTransfer)` | 本地有限队列/descriptor有空间才接受；Read还须Tag和Cpl预算 |
+| Requester→Link TX | `trySend(TlpRef, callback_token)` | TX服务、适用FC和replay空间原子检查；接管后才允许源对象释放 |
+| Link RX→Core Admission | `tryAdmit(RxHandle, RouteDecision)` | core sector+descriptor+VOQ索引配额原子预留；成功才转移RX保护 |
+| Admission→VOQ | `enqueue(DescriptorHandle)` | 已commit descriptor，按出口/VC/class/order域入队；不能另复制payload |
+| VOQ/Store→Scheduler | `eligibleHeads()` / `readRequest()` | Order Engine先给eligible；仲裁不从中间跳过禁止越过项 |
+| Scheduler→Fabric/Egress | `tryGrant(TransferGrant)` | bank读+Fabric slot+staging同时预留；失败全回滚，RR状态不误推进 |
+| Egress→TX replay | `trySend(ProtectedCopy)` | TX有保护副本后才释放staging；ACK释放replay而不是业务recv |
+| Link/control→资源等待者 | `onCredit/onAck/onResourceAvailable` | 状态先更新再通知；仅调度需要资源的发送/仲裁，不递归inline完成 |
+| Endpoint→Requester | `acceptCompletion(CplD)` | 先校验identity/status/range/Byte Count，再更新重组；最后一片才完成 |
+
+不在RX已经接受后返回gem5 `recvTimingReq=false`撤回所有权。外部Packet
+adapter与内部TryResult各自有界：Packet被接管后内部阻塞由模型持有，
+未接管时由发送者保留；retry通知与内部资源唤醒通过明确状态桥接。
+
+### 12.3 缓存和VOQ实现选择
+
+Payload Store采用有限sector allocator；M2先固定sector映射并维护
+free-list与refcount，M3可增加bank hash/端口约束。metadata和payload
+分别计容。读写跨sector按实际服务计费，不按payload平均数免费packing。
+VOQ key为(egress, VC, class, ordering_domain)，稀疏表数量受activeVoq与
+全局descriptor池限制。首次创建队列需预留索引；队列排空后安全回收。
+
+M2 Scheduler使用RR eligible heads，不扫描全芯片所有逻辑队列；维护
+active/waiting集合，入队/信用/出口/bank服务完成唤醒。每轮读取稳定状态
+快照，先构造无冲突grant集合，再commit资源与RR指针。相同周期两个
+grant不能覆盖同一个bank端口或staging容量。所有权检查在commit前后执行。
+
+### 12.4 链路、端点与时间计算
+
+每方向持有next_available、接收backing、FC状态、replay状态；请求和
+响应方向独立。服务tick按`ceil(bytes / bytes_per_cycle) × period_ticks`
+与配置吞吐合同计算，实际采用byte-budget或固定FLIT服务在profile明示。
+没有服务需求的控制事件可同Tick，正数据服务不得零Tick完成。协议FC
+与replay控制不是按完整事务RTT触发；每跳传播/处理参数分别记录。
+
+Completer的服务排队、内存服务率和Completion发送率均有限。Read返回
+按合法策略分段，Byte Count逐片递减，校验数据范围无重叠/缺口。部分
+完成后错误结束按协议profile收束，不把缺失字节填零后宣称成功。
+Posted Write源可复用由接管保护点决定，远端可见发生sink提交时；依赖
+doorbell/fence是显式事务，不能自动用虚构Cpl串行化。
+
+### 12.5 配置错误、资源诊断与runtime接口
+
+配置schema错误、协议能力不支持、拓扑非法、运行时资源阻塞、协议错误
+使用不同诊断code，携带field/object ID、reason和所选mode/fidelity。
+M0只校验配置合同、保留0=auto，不声称已做M1容量推导或已实现M2硬件。
+`raw_inputs`、profile/user覆盖顺序及effective inputs保留，允许重放解释。
+
+runtime公开registerEndpoint、submitFlow、scheduleCallback、currentTick、
+drain和report的窄facade；SimAI不得读写内部free-list或把消息完成直接
+绑定某一Switch dequeue。结束需报告pending应用/Tag/descriptor、网络/
+控制事件和匹配callback；未知拓扑/能力在启动前拒绝，watchdog只诊断。
+
+## 13. M0配置合同的实际入口
+
+`util/pcie_lab/contracts.py`提供normalize_inputs、compile_experiment和
+make_result；`cli.py`为已实现的host校验入口，`hardware_fields.json`与
+`capabilities.json`分别记录UI字段和协议能力合同。示例与执行命令见
+[工具说明](../../util/pcie_lab/README.md)，验收见[记录](validation/M0.md)。
+
+配置通过只证明M0可检查的输入/声明，输出仍为not_run。API保留raw/
+effective、覆盖历史、source/contract/manifest hash及每字段UI单位；
+通用IR单位另列，不把原始ns/KiB/GB/s值误称已转换为ps/B/B-s。
+详细硬件服务、M1自动值和M2/M3周期行为仍按前文设计实现。
