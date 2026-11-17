@@ -1,6 +1,6 @@
 # PCIe 6.0 Switch gem5 仿真架构
 
-版本：v1.2｜日期：2026-11-17｜状态：M0 host配置合同已实现；数据面待实现，无仿真结果。
+版本：v1.3｜日期：2026-11-17｜状态：M0 host配置合同已实现；数据面待实现，无仿真结果。
 依据[需求v1.0](PCIe6_Switch_Requirements.md)，硬件资源见
 [Switch架构](PCIe6_Switch_Architecture.md)，阶段与证据见
 [实施计划](PCIe6_Implementation_Plan.md)。
@@ -203,22 +203,286 @@ SimAI闭环或严格周期精度。两种运行的结果都经统一报告层汇
 §11定义AstraNetworkAPI具体适配；§14定义gem5对象与周期执行。实施前
 以V-27–V-35分别验证上述时间、匹配、完成、回压和硬件验收边界。
 
-## 3. 数据对象与接口
+## 3. 数据对象与接口：沿第2章流程逐层传递
 
-| 对象 | 核心字段/用途 |
-|---|---|
-| `ExperimentSpec` | schema、execution/fidelity/interface/profile、seed、source hashes、raw/effective inputs |
-| `ProtocolProfile` | 规范版本、端点角色、MPS/MRRS/RCB、Tag能力/enable、VC/FC能力、支持子集 |
-| `TopologyIR` | port/link IDs、方向/宽度/速率/模式、域、地址和bus范围 |
-| `FlowIR` | flow/application ID、字节、地址、release/dependencies、完成合同 |
-| `Transaction` | parent ID、Requester/Function/Tag、地址/长度、class/TC/VC/属性、重组进度 |
-| `ResourceProfile` | RX、payload、descriptor、VOQ、bank、Fabric、staging、replay预算 |
-| `SizingResult` | 推导中间值、建议/有效值、各限制项及资源诊断 |
-| `ResultBundle` | 实际模式/覆盖、配置hash、版本/dirty、窗口、样本/未完成、metrics/trace/目标评估 |
+本章按“配置输入→SimAI任务→边界flow→gem5事务→硬件转发→完成反馈→
+结果”介绍数据的产生、消费、变更与释放。**IR是层间数据合同，不是把
+所有层的状态放进一个大对象。** 配置、业务依赖、协议身份、物理存储与
+callback分别拥有自己的生命周期，通过稳定ID关联。
 
-workload消息tag、应用ID和PCIe Tag分别命名；集合通信chunk不是TLP。
-同一flow可拆成多个请求，每请求可返回多个CplD。父应用只有其声明的
-完成合同满足后才推进依赖。
+### 3.1 对象数据流全图
+
+```mermaid
+flowchart TB
+  RAW[RawInput / Profile Overrides] --> EXP[ExperimentSpec]
+  EXP --> PRO[ProtocolProfile]
+  EXP --> TOP[TopologyIR / EndpointBinding]
+  EXP --> RES[ResourceProfile / SizingResult]
+  EXP --> WORK[WorkloadSpec / ComputeProfile / Placement]
+  PRO --> INIT[Runtime初始化]
+  TOP --> INIT
+  RES --> INIT
+  WORK --> TASK[SimAI TaskRecord / Communicator]
+  TASK --> FLOW[就绪FlowIR]
+  FLOW --> MSG[SendIntent / RecvIntent / MatchRecord]
+  MSG --> MAP[TransportMapping / FlowContext]
+  INIT --> MAP
+  MAP --> TXN[Transaction / RequestRecord]
+  TXN --> DESC[RX Handle / ForwardDescriptor]
+  DESC --> TOK[Reservation / TransferGrant / Progress]
+  TOK --> SINK[端点提交 / Cpl重组]
+  SINK --> COMPLETE[RequestCompletion / FlowCompletion]
+  COMPLETE --> MATCH[Adapter匹配 / CallbackRecord]
+  MATCH --> TASK
+  EXP --> REPORT[ResultBundle]
+  TASK --> REPORT
+  COMPLETE --> REPORT
+  TOK --> TRACE[ObservationTrace / ResourceCounters]
+  TRACE --> REPORT
+```
+
+这里的箭头表示生产、引用或状态反馈，不等于对象被反复序列化/复制。
+初始化文件进入只读配置；运行时调用传typed对象/句柄；统计使用事件与
+ID汇合，不从已释放对象读取历史数据。
+
+| 类别 | 状态所有者 | 跨边界可传内容 | 何时结束 |
+|---|---|---|---|
+| 配置/能力/拓扑 | 配置编译器→runtime只读快照 | 值对象、profile/hash、稳定ID | 实验结束；更新需新epoch/实验 |
+| 任务/collective依赖 | SimAI scheduler/SimCCL | 就绪flow及追溯前驱ID | 对应任务/collective完成 |
+| 消息/匹配/callback | PcieNetwork adapter | flow与completion token | 匹配及所需callback完成或失败 |
+| 请求/Tag/重组 | gem5 Requester/Completer | Transaction与request ID | 完整响应/端点提交/失败收束 |
+| 转发/存储/grant | gem5 port/core/fabric | generation句柄与资源token | 保护移交及最后引用释放 |
+| 时间线/结果 | runtime/metrics/result adapter | 已复制的观察记录及汇总 | 报告归档，不依赖活跃DUT指针 |
+
+### 3.2 ExperimentSpec：全实验的配置快照
+
+**生产/输入：** HTML/CLI原始输入、profile覆盖、用户覆盖、schema版本、
+seed与来源版本。M0的`compile_experiment`已产生部分可执行合同；实际
+键为`execution_mode/link_fidelity/interface_model/scenario_profile`、
+`raw_inputs/profile_overrides/effective_inputs/override_history`及hash等。
+
+**消费/输出：** 配置编译器从该快照产生ProtocolProfile、TopologyIR、
+ResourceProfile、后续WorkloadSpec与runtime初始化参数。实验配置并不
+直接变成一个TLP，输入`target`也不是已经完成的应用吞吐。
+
+原始字段保留UI单位，`input_units`逐字段解释；`ir_units`声明内部ps/B/
+B-s合同，不表示M0已执行全部单位转换。0=auto先保留，M1推导后生成新的
+有效资源版本与hash，不能原地修改旧M0快照后沿用其config_hash。
+
+M0的hash覆盖当前合同序列化内容、source/contract/manifest fingerprint；
+后续新增workload/拓扑编译字段要明确canonical serialization及schema
+版本。不同raw/profile即使得到相同容量，也保留其来源差异。
+
+### 3.3 ProtocolProfile：协议解释而非硬件占用
+
+**生产：** 配置编译器结合所选Base Spec版本、端点角色、能力声明和输入
+MPS/MRRS/RCB/Tag/TC/VC/FC设置生成；同一实验可有不同端点/方向profile。
+
+**核心字段：** spec/ECN版本、port/endpoint role、最大与实际MPS/MRRS、
+RCB归属、Tag requester/completer能力及enable、TC→VC映射、Shared FC
+TX能力/RX启用/merged状态、header格式与支持/近似/不支持的事务集合。
+
+**消费：** Mapper/Requester决定合法请求拆分和Tag集合；Completer决定
+合法CplD；Link/FC/replay根据所选能力解释外链格式/计数；Order Engine
+选择适用关系。当前credit余额、Tag已用数、在途重放不能存入该只读profile。
+
+M0只有`protocol`中的RCB角色及Shared FC能力声明校验，完整profile尚待
+实现。`capabilities.json`描述条款、近似和未来测试，不等于执行支持。
+配置合法不代表收发数据符合协议，也不能把HTML reqHeader当最大header。
+
+### 3.4 TopologyIR与EndpointBinding：逻辑rank如何找到物理路径
+
+**生产：** 拓扑/placement编译器消费节点、link、lane/port预算、域/窗口、
+rank与Function放置。M0的单根uniform-depth树仅是结构子集，不是完整IR。
+
+**字段与后续派生：** node/port/link ID、peer端口、方向、速率/宽度、传播/
+retimer、partition、地址窗口、Requester ID/bus归属、route epoch；
+EndpointBinding另记录rank→endpoint/Function、建模buffer窗口和协议角色。
+
+**消费：** runtime创建实际Endpoint/Link/Switch并绑定对端；Route Engine
+生成地址请求表和Requester ID返回表；adapter将src/dst rank转换为绑定。
+业务src/dst不能直接当port号；一rank的多Function或多链路也不自动均分。
+
+地址使用建模buffer ID+offset映射PCIe窗口，不用host进程指针作硬件地址。
+Flow固定route epoch，request/Cpl分别查询合法路径；动态配置另定义排空/
+epoch切换，不原地重解释在途descriptor。无法部署的graph仍可独立标记
+探索模式，但不能进入标准透明数据面的已验证配置。
+
+### 3.5 ResourceProfile与SizingResult：建议值到有限实例
+
+**ResourceProfile生产：** 用户显式预算或M1 sizing的自动建议，经拓扑/
+协议校验形成每port/Slice/bank/pool的有效配置。字段含RX header/data、
+core sector/descriptor、VOQ索引/额度、bank beat/端口/延迟、Fabric通道/
+slots、egress staging、replay、class保留及clock/CDC。
+
+**SizingResult生产：** 解析工具消费ExperimentSpec、ProtocolProfile及
+TopologyIR，输出请求/Cpl/Cell数量、窗口/容量/位宽建议、每项限制、计算
+中间值、假设和诊断。它是报告和建议，不持有实际硬件资源。
+
+**流向：** SizingResult→用户/自动值解析→已校验ResourceProfile→各模块
+allocator/queue/service初始化。runtime当前used/reserved/free与峰值另由
+ResourceState/Counters持有，不能通过修改profile总容量解决运行时阻塞。
+
+显式容量不足报告具体限制，不能静默放大；自动值未计算就不能创建
+“0容量但无限接收”的模块。`slices`并行通道与forwarding_slices物理分区、
+`poolKiB`每入口payload与额外ECC/descriptor预算分别保留。
+
+### 3.6 WorkloadSpec、TaskRecord与Communicator：仅由SimAI调度
+
+**输入：** Train/Prefill/Decode/Diffusion配置、compute profile、模型/
+并行策略、rank placement和任务/collective描述。WorkloadSpec是只读
+场景输入；TaskRecord保存动态ready/running/waiting/completed/failed状态。
+
+TaskRecord字段至少包括task/parent/phase/layer/microbatch ID、成员/前驱、
+compute耗时、通信操作/张量大小、完成合同。Communicator提供稳定ID、
+成员rank顺序与分组版本；SimCCL把collective展开为有依赖的channel/chunk/
+flow，并记录选择的algorithm/protocol及成本来源。
+
+**输出：** 就绪计算经`sim_schedule`委托gem5安排到期事件；就绪通信成为
+FlowIR。任务前驱的引用计数和释放决定留在SimAI，gem5只接收已经可提交
+的flow，保留前驱ID仅用于trace。没有完整依赖的CSV只产生replay流量。
+
+### 3.7 FlowIR、消息意图与FlowContext：跨越业务/硬件边界
+
+**FlowIR生产：** SimCCL/显式算法或synthetic source。字段至少为flow ID、
+application/task ID、src/dst rank、payload bytes、communicator、message
+tag、algorithm/protocol/channel/chunk、sequence、release time、追溯依赖、
+transport、buffer范围和completion contract。这里的protocol是collective
+算法协议标识，与PCIe ProtocolProfile命名分开。
+
+**SendIntent/RecvIntent生产：** adapter接收AstraNetworkAPI调用，复制所需
+request/flowTag和byte语义，建立callback ID与匹配键。RecvIntent只描述
+期望来源/字节/序号，不制造第二份flow。MatchRecord关联send、recv及到达
+状态，能处理两者任意先后。
+
+**FlowContext生产：** `SubmitFlow`被runtime Accepted后创建，持父flow、
+有限待发/在途/完成片段数、错误及完成token。Blocked时调用方仍持FlowIR
+且不创建第二个context；Writable后重试同一提交身份，不能重复接管。
+
+transport mapping决定逻辑方向到事务方向的转换：write-push由src写dst；
+read-pull由dst对src发MemRd，数据随CplD回dst。FlowContext保存该映射，
+不能把read-pull的Requester误标为逻辑src。它不代SimAI拥有整个模型DAG。
+
+### 3.8 Transaction、RequestRecord与Completion：gem5端点拆分
+
+**生产：** Transaction mapper消费已接管FlowContext、端点窗口和协议/
+资源profile。按MPS或MRRS、地址边界生成request ID；Read通过Requester
+分配本地Tag/Cpl预算。Transaction承载不可变协议header/attributes与
+payload范围，RequestRecord持动态状态，不混在只读FlowIR里。
+
+RequestRecord包括Requester/Function/Tag、地址/长度、父flow、已发状态、
+expected/received ranges、status、预算句柄和generation。Completer根据
+MemRd产生一个或多个CplD，每片带相同协议请求身份、Byte Count/Lower
+Address及有效数据。CplD是反向网络事务，不是一个SimAI recv callback。
+
+**消费/回流：** Link/Switch按Transaction转发；目的端提交MemWr或Requester
+重组全部CplD后生成RequestCompletion。FlowContext聚合所有请求结果，
+满足父完成合同后才产生FlowCompletion。Tag在单MemRd完成后归还，父flow
+不必等所有请求才归还每个已完成Tag，也不能首Cpl提前归还。
+
+### 3.9 ForwardDescriptor、Reservation与TransferGrant：硬件内部数据流
+
+**ForwardDescriptor生产：** RX校验/分类/route后，Admission原子分配
+store/descriptor/VOQ配额。字段为header、store handle、ingress/egress、
+VC/class/order域/sequence、route epoch、owner及timestamps。
+header-only请求无payload sector，仍有descriptor及传输/解析开销。
+
+**数据路径：** RX源副本→core-write-pending→DATA_READY/VOQ→active
+transfer→egress protected copy→TX/replay。资源commit不等于copy完成；
+只有core写入完成建立保护，才释放RX backing并形成相应信用更新。
+
+**Reservation生产：** 各pool发(pool/object/generation/units/state) token，
+进入reserved→committed→released或未commit的cancelled。资源所有权变更
+是仿真事件，不能靠C++对象析构时刻替代；stale token不释放新代对象。
+
+**TransferGrant生产：** Scheduler对eligible heads与资源snapshot生成
+计划，联合预留完整TLP staging、首Cell bank/Fabric服务及in-flight槽。
+commit成功才从VOQ移交一次。TransferProgress按Cell/beat更新到齐范围，
+后续服务不重复pop descriptor或预留整包；bank/Fabric/staging分别释放。
+
+上述对象不跨到SimAI API。对上层只输出带ID的完成/诊断，对统计层输出
+复制后的观察事件，不暴露core free-list或可写descriptor指针。
+
+### 3.10 CompletionRecord、MatchRecord和CallbackRecord：完成如何反馈
+
+| 对象/事件 | 生产者→消费者 | 判定含义与生命周期 |
+|---|---|---|
+| RequestCompletion | sink/Requester→FlowContext | 单个MemWr目的提交或MemRd响应齐全；status及request ID聚合一次 |
+| SourceReusable | runtime保护点→adapter | 源范围可复用；不能据此宣称目的可见 |
+| DataVisible | sink/父FlowContext→adapter | 该flow所需数据全部在目的可见；可早于recv登记 |
+| MatchRecord完成 | adapter matcher→callback队列 | DataVisible且RecvIntent满足，字节/身份匹配；只完成一次 |
+| CallbackRecord | adapter→SimAI | token/外部handler关联、kind/status/tick；gem5 callback phase调用后退休 |
+| FailureRecord | 拥有该状态的模块→runtime/adapter | 保留首错及已完成范围；失败不冒充成功或强行清空资源 |
+
+一个flow可产生源释放和目的可见两类事件；状态mask/sequence防止重复
+触发各自callback。send与recv不是“一份callback任选其一”。adapter注册
+record明确外部arg生命周期，实验结束前检查pending callback/match。
+无接收匹配、部分完成、超时均报告状态，不直接释放业务后继作为成功。
+现有Astra callback是`void (*)(void*)`，并无通用错误status参数；adapter
+不能把FailureRecord直接当成功handler调用。需使用明确的错误通道或
+实验失败合同，若扩展API则先做版本/调用链核查。
+
+### 3.11 ResultBundle与ObservationTrace：从两侧汇合结果
+
+**生产：** runtime/metrics发资源与事务观察，SimAI提供任务/collective
+时间线，result adapter根据ID汇合。ObservationTrace是不可变已发生事件，
+包含tick、事件kind、对象/父ID、port/资源、字节/状态及所需快照；它不是
+可反向修改DUT的状态接口。
+
+ResultBundle包含ExperimentSpec快照/hash、两仓库/SimCCL版本及dirty、
+mode/fidelity、source/scenario/profile hashes、单位、warmup/measurement/
+drain、样本与未完成、应用/通信指标、逐link和硬件stall/占用、错误与
+目标评估、trace索引。大trace外置文件可分段，报告保留schema与索引。
+
+M0实际`make_result`仅输出not_run/failed/incomplete envelope：完整
+experiment快照、0 samples、null性能指标和protocol_validated=false；CLI
+增加producer Git metadata。周期/SimAI指标和上述完整trace仍待实现，
+不能因为对象名相同就声称后续ResultBundle字段已经可用。
+
+终止时先停止新业务注入，再按profile排空硬件/消息/callback，最后冻结
+结果。观察窗口结束但未排空时记录删失/未完成，不把它们从P99样本静默
+删除。统计对象不持活跃payload引用以免人为阻止释放。
+
+### 3.12 主要接口的输入/输出与失败归属
+
+| 接口/边界 | 消费对象 | 成功输出 | Blocked/Error及负责方 |
+|---|---|---|---|
+| `compile_experiment`（M0已有） | 原始配置/覆盖/source hashes | M0 ExperimentSpec字典 | schema/role/topology诊断由host处理；不启动模拟 |
+| sizing/配置编译（M1+） | ExperimentSpec及协议/拓扑声明 | SizingResult、有效Profile/IR与新hash | 无法确定自动值或非法能力显式拒绝，不隐式无限资源 |
+| init/register endpoint | 有效Profiles、TopologyIR/Binding | runtime/端点/Link实例和绑定ID | 初始化失败不允许开始发流 |
+| AstraNetworkAPI send/recv | Task/Flow与API参数、callback | Send/RecvIntent、MatchRecord | adapter持有有界等待/生命周期；不让硬件自行处理消息tag |
+| `submitFlow` | 就绪FlowIR与完成token | FlowId/FlowContext（Accepted） | Blocked保持提交者所有权；Invalid明确错误，不重复接管 |
+| `tryIssue` / mapper | FlowContext及window/profile | Transaction/RequestRecord | Tag/Cpl/DMA等待属于端点；不让SimAI直接分配Tag |
+| `tryAdmit` / commit | RX handle、ParsedHeader、RouteDecision | write-pending Descriptor与资源bundle | core资源不足保留RX副本，不能提前返信用 |
+| `selectGrant/commitGrant` | eligible descriptor与资源snapshot | TransferGrant/Progress | 失败无部分持有；core记录wake与原因 |
+| completion/match callback | Request/FlowCompletion及RecvIntent | CallbackRecord→SimAI任务释放 | 错误/未匹配不作成功；runtime/adapter分别清理自己的状态 |
+| report/export | 统计、trace、配置/版本 | ResultBundle/JSON/HTML适配 | 不兼容版本/单位/hash由报告层拒绝，不能改DUT去迎合旧报告 |
+
+所有运行时接口仍使用第2章的同进程typed调用+异步事件，表中的对象
+不要求逐次写JSON。源对象是否可复用取决于Accepted/保护点，而非函数
+调用已返回；Blocked不留隐式引用，Accepted后的状态有界且可追踪。
+
+### 3.13 一个4KiB传输的对象链
+
+以write-push `rank0→rank1`、payload=4096B、MPS=256B、地址对齐为例：
+
+1. ExperimentSpec编译出rank0/1的EndpointBinding、协议和有限资源；
+   SimAI的TaskRecord就绪，生成flow `f42`，adapter登记对应消息/回调。
+2. SubmitFlow Accepted创建FlowContext `f42`；mapper生成16个MemWr
+   request，均带parent_flow=f42，各有不同request ID和256B payload范围。
+3. 每request经Link/RX→descriptor→core write→VOQ→grant→staging→TX；
+   descriptor/transfer IDs可每跳重新分配，但保留request/flow父关联。
+4. rank1 sink逐request提交一次；16个RequestCompletion累计4096B后，
+   runtime发DataVisible(f42)。没有PCIe Cpl，不能凭空分配16个Read Tag。
+5. adapter已有匹配RecvIntent则发recv callback；尚无匹配则保留有界
+   MatchRecord。SimAI在所需callback后释放后继任务，统计以f42关联
+   业务耗时、16个请求、各跳Cell/FLIT与资源等待。
+
+同一逻辑flow选择read-pull且MRRS=512B、MPS=256B、合法RCB/对齐时，
+由rank1发8个MemRd到rank0，每个按固定示例策略返回2个256B CplD，共
+16片数据；Tag属于rank1 Requester。完成链由8个Read RequestCompletion
+聚合成f42，逻辑数据仍从rank0流向rank1。这个差异由TransportMapping
+明确记录，不靠src/dst字段猜测；示例不是要求所有Completer必须同样拆分。
 
 ## 4. 模块和gem5接入
 
