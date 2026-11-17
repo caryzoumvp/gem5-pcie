@@ -202,6 +202,8 @@ Read these design documents before implementing the switch:
 2. `docs/pcie_switch/PCIe6_Switch_Architecture.md`: hardware decomposition.
 3. `docs/pcie_switch/PCIe6_Simulation_Architecture.md`: gem5 implementation
    contracts, fidelity levels, milestones, and acceptance criteria.
+4. `docs/pcie_switch/PCIe6_Implementation_Plan.md`: phased tasks,
+   dependencies, exit criteria, and validation evidence.
 
 This is a proposed gem5 timing model, not an existing PCIe 6.0 implementation.
 Use gem5's event queue and existing PCI configuration infrastructure. Keep

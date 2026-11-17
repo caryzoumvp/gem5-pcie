@@ -1,391 +1,450 @@
-# PCIe 6.0 Switch IP 需求定义
+# PCIe 6.0 Switch 仿真需求定义
 
-版本：v0.6（需求定义基线）｜日期：2026-10-28
+版本：v0.9｜日期：2026-11-17｜状态：需求与验收计划，尚无实现结果。
 
-## 1. 定位与规格结论
+## 1. 目标、来源与优先级
 
-面向 AI 服务器板内与机箱内互连，开发可参数化的 PCIe 6.0 Switch IP：每 lane 64 GT/s，PAM4、256B FLIT、FEC/CRC，支持标准 PCIe 层次交换、P2P、多主机隔离与可管理 Fabric。IP 覆盖 64/104/144 lanes 的候选集成配置，144 lanes 作为目标集成配置【TARGET】。设计上预留广播复制、INC 与 CXL 协议适配接口；CXL 内存池化、多节点 Scale-Up、UALink 和 SUE-T 分别定义交付范围与验证条件。
+本项目在gem5中建立PCIe 6.0 Switch性能与资源仿真，回答离线实验台的
+“目标带宽能否达到、受什么限制、需要多少端口/数据面/缓存资源”问题。
+协议正确性以正式规范为准，功能范围由实验台驱动，controller资料补充
+实现合同。本文替换此前以竞品产品规格或DWC controller为中心的需求。
 
-**规格状态：**144 lanes 是产品候选容量；单跳片上 core latency <100ns 是架构目标；XPU 端到端 RTT <250ns 是受严格边界约束的挑战目标。三者均不是已实现规格。首代必须确保 PCIe 基本功能与互操作闭合；广播、INC 和 CXL 需明确版本、端点及软件依赖后进入相应版本的验收基线。
+| 优先级 | 来源 | 决定内容 | 不能据此承诺 |
+|---|---|---|---|
+| 1 | [PCI Express Base Specification Revision 6.0](PCI-Express-Base-Specification-Revision-6.0.pdf)，本地6.0-1.0-PUB | TLP/FLIT、事务身份、ordering、路由、FC和重传的规范行为 | 本模型已经完整合规或已做PHY签核 |
+| 2 | [PCIe6_Scaleup_Lab_Offline.html](PCIe6_Scaleup_Lab_Offline.html) | 应用功能、设计输入、资源推导、结果与交换格式 | 其中简化公式等于全部规范规则 |
+| 3 | [pcie_sw_databook.pdf](pcie_sw_databook.pdf)，DWC v5.71a，May 2020 | controller/application边界、队列、接口、配置代理等细化参考 | Gen6支持、完整Switch或本项目必须复现DWC RTL |
+| 补充层 | 附录A竞品资料与§11补充目标 | 产品容量、功能候选、性能对标与扫描目标 | 取代规范、自动成为首版强制验收或本项目实测能力 |
 
-### 1.1 状态、优先级与来源
+发生冲突时：规范约束优先；HTML近似保留为显式`lab_reference`模式，
+不得作为`pcie6_timing`的协议规则。databook只补充实现选择，不能扩大
+首版范围或替换HTML中的配置项。未核实的竞品数值不参与验收。
 
-| 标记 | 含义 | 使用规则 |
+本次不修改HTML。其现有计算、缺陷和近似均需可追溯，协议修正导致的
+结果差异单列解释，不能悄悄改为另一套默认值。
+
+## 2. 使用场景与交付范围
+
+| ID | 场景 | 必须交付的能力 |
 |---|---|---|
-| MUST | 对所选交付版本必须满足 | 按验证证据冻结；本文件不是硅验证证明 |
-| TARGET | 候选工程目标 | 须经模型、RTL/PPA 或实测验证后才能承诺 |
-| STUDY | 前瞻或可选能力 | 明确触发条件后另立验收范围 |
-| STD | 标准要求 | 标准版本、ECN、勘误应进入合规矩阵 |
-| COMP | 竞品基准 | 必须带型号、来源和测量边界；厂商宣称不等于独立实测 |
-| BIZ | 业务输入 | 需求来源，合同状态另行记录 |
-| ARCH / CALC | 架构选项 / 数学推导 | 不应写成来自厂商或既有项目决策 |
-| SIM | 等待仿真或测量冻结 | 本文未运行 SimAI、ASTRA-sim 或芯片仿真，无模拟结果 |
+| B-01 | 需求分析：Decode/Prefill/Train/Diffusion | 模型、并行策略、rank放置与通信需求到拓扑负载的映射 |
+| B-02 | 硬件规格：Read/Write sizing | 应用传输到TLP/Cell/Tag/Credit/Replay/队列/SRAM预算 |
+| B-03 | 硬件仿真：单链路、单Switch和级联 | 当前配置运行、吞吐/时延/停顿/占用及目标可达性 |
+| B-04 | Incast与突发 | 端口比、热点、Tag/信用/端口/Fabric瓶颈与容量不足诊断 |
+| B-05 | 对比、模板、验证记录和历史版本 | 配置快照、结果来源、模式、可复现对比与导出 |
+| B-06 | 后续workload联动 | SimAI/SimCCL或trace提供流量/依赖，PCIe后端负责时序 |
+| B-07 | 后续协议/产品扩展 | 多域/NTB、AI复制/INC、CXL等独立立项，不阻塞核心实验台交付 |
 
-### 1.2 与已有资料的继承关系
+首版先实现硬件页的配置兼容、解析sizing和synthetic事件仿真，再扩展
+需求分析页的闭环工作负载。完整OS、PHY训练、RTL/VIP联动和专用IP
+接口复现不是首版前置条件。详细协议模式仅宣称已测试的规范子集。
 
-sharpfabric 中《锐联半导体_商业计划书.md》§3.3、§3.5、§4.1 与《OrbfabriX-v0.34-roadmap-architecture-v2.pptx》第6–7页把 E-series 定义为电分组交换，先从板内/机箱内进入，再向多协议、柜内互连与 INC 扩展。[I1][I3]
+## 3. 协议约束与近似边界
 
-本需求继承阶段化路线，但做以下澄清：
+以下均指本地Base Spec印刷页，作为协议覆盖矩阵的起点；实现时必须
+继续展开所选事务/能力的适用条款，不以本表代替整份规范。
 
-- 原资料 E32/E64 中的数字是交换容量编码，不能解释为 PCIe lane 数；原 E32 有 64-lane 配置，不能把“144 lanes”误写为原方案已有配置。
-- 原计划书含“3.2T/6.4T”及有效带宽假设，不能直接用于本 PCIe IP 的线速定义。本文件按每 lane 8 GB/s 单向原始线速重新记账。
-- 144 lanes 是扩展配置【TARGET】；与原 64-lane 首代路线之间的面积、SerDes 数量、封装、功耗和时间差异列入T-08【待验证】。
-- 统一 Fabric 内核不等于协议语义统一。PCIe、CXL、UALink、Ethernet 需要各自的协议适配与一致性/顺序处理。
-- E-series 中的数据广播是电分组复制；不等同于后续 M-series 的 WDM 光广播 Mesh。[I1][I3]
-- 历史报告包含不同代际、日期的竞品和带宽口径；本文件以当前官方来源核对可确认指标，不继承未验证数值。[I2]
-
-## 2. PCIe Switch应用场景与需求拆解
-
-### 2.1 应用场景
-
-**SC-01：单Host八卡AI服务器。** CPU经一个x16上行口连接Switch，八个x16下行口连接XPU，共144 lanes。CPU执行枚举、控制与数据准备；XPU之间通过合法P2P搬运activation、参数分片或中间结果。Host方向的集中数据装载受上行带宽限制，XPU间通信受目的端口和内部Fabric限制。边界条件为Host/IOMMU允许P2P、设备BAR可映射、驱动支持。拆解为标准枚举/路由、P2P、ACS可配置、64-bit地址和混合流量仲裁，对应F-01/02/03/06及P-02/05/07。
-
-![SC-01 应用场景](figures/sc01_eight_xpu.svg)
-
-**SC-02：XPU/NIC/SSD混合I/O服务器。** Switch同时连接CPU、XPU、NIC和NVMe SSD；工作负载包括网络输入、存储读取、XPU间搬运与CPU控制。大块DMA与小消息并存，Gen5/Gen6设备可能共存。不能以全端口大包峰值代替小消息P99。拆解为混代与分叉、目的队列隔离、P/NP/Cpl信用、QoS、热插拔和DPC，对应F-01/04/06/08及P-05/06/08。
-
-![SC-02 应用场景](figures/sc02_mixed_io.svg)
-
-**SC-03：多Host可组合资源池。** 两个或四个独立RC/OS域接入同一芯片，各Host枚举分配给自身的设备；跨域通信通过NTB窗口或明确定义的Fabric接口进行。资源重新分配涉及设备停止DMA、地址权限撤销、复位和重新枚举。共享物理Switch不意味着设备可以同时被任意Host直接驱动。拆解为虚拟分区、NTB、地址窗口、租户隔离、域级复位与管理事务，对应F-05/07/08/09/17及IP-05。
-
-![SC-03 应用场景](figures/sc03_multihost.svg)
-
-**SC-04：TP/DP集合通信加速。** 多XPU执行AllReduce、ReduceScatter、AllGather与Broadcast。普通PCIe版本提供P2P单播；AI版本通过专用descriptor、数据复制与INC减少源端重复发送和中间数据往返。计算位置改变后必须重新验证数值、顺序和失败恢复。拆解为组成员、epoch、复制队列、归约算力、上下文和CCL插件，对应F-10/11/12/13及P-09/10；仅在相同拓扑与合理算法基线上计算收益。[W4][R02][R04]
-
-![SC-04 应用场景](figures/sc04_collective.svg)
-
-**SC-05：MoE推理与训练的EP通信。** dispatch按照每token选择的专家将activation发送到动态XPU集合，combine将专家结果返回并组合。专家不均匀分布会产生热点和突发；多个专家位于同一XPU时必须去重目的设备。通信主体为All-to-Allv，重复数据子集可以使用多播，其余仍为点到点。拆解为动态目的描述、组配置时延、队列公平性、热点隔离和多播慢成员策略，对应F-10/11/14、A-04/05及S-04。[W10][R03]
-
-![SC-05 应用场景](figures/sc05_moe.svg)
-
-**SC-06：CXL内存容量池与冷KV层。** 支持CXL的Host经CXL Switch使用Type-3设备，FM分配内存资源并维护Host域。GPU直接访问、CPU中转或DMA搬运形成不同数据路径，须分别建模；内存池不等于HBM扩容后的同等带宽/时延。拆解为CXL.io/mem、FM/CCI、地址映射、LD隔离、RAS和OS绑定流程，对应F-15/16、B-06及S-07。[W6][R05][R06]
-
-![SC-06 应用场景](figures/sc06_kv_memory.svg)
-
-**SC-07：16/32/64 XPU扩展系统。** 多颗Switch通过显式级联接口连接，系统同时约束每XPU带宽、跳数、Host域、布线与故障域。标准PCIe版本采用合法层次；多路径Clos需要独立Fabric模式、地址域与顺序规则。拆解为拓扑管理、级联带宽、NTB/分区、路径一致性和故障隔离，对应F-05/06/08/09、IP-06与T3/32-XPU拓扑。UALink/SUE-T属于后续协议扩展，不将其系统节点上限写成PCIe芯片端口数。[W5][W7]
-
-![SC-07 应用场景](figures/sc07_scaleup.svg)
-
-### 2.2 场景—业务需求—规格映射
-
-| ID | 场景 | 所需能力 | 决定哪些规格 | 来源/状态 |
-|---|---|---|---|---|
-| B-01 | SC-01：4/8 XPU 服务器内部通信 | 标准 P2P、低时延、小包高吞吐 | x16 数量、lane 总数、内部带宽与仲裁 | BIZ、I1；MUST |
-| B-02 | SC-02：CPU–XPU–NIC–SSD 混合 I/O | 扇出、隔离、Gen5/6 混合与 QoS | 上行配比、分叉粒度、buffer、错误隔离 | I1、W2；MUST |
-| B-03 | SC-04：TP/DP 集合通信 | AllReduce、ReduceScatter、AllGather、Broadcast | 广播扇出、INC 算力、上下文、数据格式 | BIZ、W4；TARGET |
-| B-04 | SC-05：MoE EP dispatch/combine | 不均匀 All-to-Allv、热点流量、动态目的集合 | 队列隔离、动态多播、组表更新机制 | BIZ、W10；TARGET |
-| B-05 | SC-03/07：16/32/64 XPU 多节点系统 | 多主机、地址域隔离、通信库与拓扑管理 | NTB、域数、级联、跳数与带宽配比 | BIZ、I2；TARGET |
-| B-06 | SC-06：内存容量扩展/池化 | CXL.mem 交换、FM、隔离与 RAS | CXL 版本、Host/LD 数、地址映射、内存端点 | BIZ、W6；独立 CXL 版本 |
-| B-07 | SC-07：后续 rack-scale Fabric | 高 radix、多 plane、光电延伸、可扩展语义 | 下一代 lane 数、适配器与物理接口 | I1、W5/W7；STUDY |
-
-### 2.3 系统与语义边界
-
-“节点”统一拆为 Host（独立 RC/OS 域）、XPU（加速器）、设备端口、交换芯片和 Fabric 端点，所有数量均应指明对象。144 lanes 不能推出 144 节点，也不能推出单芯片无阻塞连接 144 个 XPU。
-
-多品牌 XPU 接入仅保证已验证 PCIe 互操作范围；应用层协同还依赖 BAR/P2P、IOMMU、ACS 策略、驱动和通信库。PCIe Switch 不自动提供跨 XPU 硬件 cache coherence，也不自动让 GPU 直接使用 CXL.mem。[I2]
-
-### 2.4 官方产品简报与应用映射
-
-- **[Astera Labs Scorpio Smart Fabric Switches — Family Brief，May 2026，5页](https://www.asteralabs.com/wp-content/uploads/2026/05/FB_Scorpio_Smart_Fabric_Switches.pdf)** [W11]。应用与拓扑见第2–5页：P-series覆盖混合I/O、8/16 GPU服务器与KV Cache解聚；X-series覆盖高radix单跳/多级Scale-Up。分别关联SC-01/02/05/06/07。
-- **[Broadcom PEX90000 Series — Product Brief，PB105，2026-08-27，2页](https://docs.broadcom.com/doc/PEX90000-PB)** [W12]。第1页为多Host与Fabric，第2页为协议、诊断、接口及90ns cut-through指标。关联SC-01/02/03/07。
-
-【场景补充】SC-02/06增加经PCIe/NIC/SSD访问的KV Cache memory/storage appliance；该路径可以独立于CXL，访问协议和GPU/CPU中转分别定义。SC-03增加维护期间的局部端口重配置及资源变更隔离；SC-07以端点链路预算验证高radix，不能将X-series的最多80 GPU或P-series的16 GPU拓扑直接套入144-lane配置。[W11][W12]
-
-## 3. 标准范围与对标依据
-
-PCIe 6.0基线以PCI-SIG正式规范、适用ECN和勘误为准。[W1] 对标PEX90000 PB105所列PCIe 6.3，建立6.0→6.3差异与适用功能清单【STD/TARGET】；规范修订冻结后逐项验收，不将兼容64GT/s等同于已实现6.3全部功能。[W12] CXL、UALink与SUE-T分别保持协议版本、端点和系统边界。[W5][W6][W7]
-
-竞品可确认规格、性能参数、原始来源、测试边界及证据缺口统一列于**附录A**。正文中的COMP表示来源于附录A的对标方向，不表示本IP继承竞品实现或已通过相同测试。
-
-【证据属性】标准能力、芯片产品规格、厂商性能分析、第三方实测与系统部署规模分别记录。没有包型、时间戳和负载条件的latency数值不作为同口径验收阈值。
-
-## 4. 交付版本与功能定义
-
-### 4.1 版本边界
-
-| 版本 | 交付范围 | 进入冻结的条件 |
+| 约束 | 首版要求 | 规范索引 |
 |---|---|---|
-| V1 PCIe通用交换 | Gen6/Gen5、标准层次交换、P2P、分区、NTB候选、RAS/管理 | 标准合规与目标CPU/XPU互操作闭合 |
-| V1-A AI增强 | 硬件复制、动态目的选择、INC及CCL插件 | 端点协议、软件API、顺序/重试/数值正确性闭合；不能仅交付一块运算逻辑 |
-| V1-C CXL版本 | 初始按CXL 3.1 Switch候选，CXL.io/mem、Type-3池化与FM；旧版本兼容矩阵单列 | 客户Host/内存端点支持、版本/功能矩阵与FM验收冻结 |
-| V2多协议扩展 | UALink/SUE-T适配与高radix扩展预研 | 目标规范、端点、PHY和客户平台明确后独立立项 |
+| Requester/Tag身份 | 每Requester未完成请求唯一；最后Completion后才释放；编码能力、enable及实际预算分开 | §2.2.6.2，页153–159 |
+| Memory请求 | MPS/MRRS分别约束相应事务，单请求不跨4 KiB；检查长度/地址/byte enable | §2.2.7、§2.3.1，页162起、208起 |
+| Completion | 校验状态、长度、Byte Count、Lower Address；同请求数据按地址递增且完整 | §2.2.9、§2.3.1.1、§2.3.2，页195起、214起、219起 |
+| RCB | RC可为64/128B；其他System Elements为128B；非任意端点通用64B开关 | §2.3.1.1，页214–215 |
+| ordering | 在合法eligible集合内仲裁，禁止任意重排；逐项声明RO/IDO支持 | §2.4，页222起 |
+| TC/VC | 外链VC与内部通道/队列不是同一对象；保存映射与资格 | §2.5，页229起 |
+| FC | 逐链路接收空间约束；不代表端到端完成；Flit Mode TX必须支持Shared FC，RX支持可选 | §2.6，页235起；§2.6.1.1，页242起 |
+| FLIT | 256B：236B TLP区、6B DLP、8B CRC、6B ECC；TLP区不等于应用payload | §4.2.3.3，页351–352 |
+| replay | 有限副本、确认/重传及重复抑制；重放TLP信息不等于重放旧DLP内容 | §4.2.3.3及其引用的数据完整性规则 |
 
-AI与CXL增强可能共Die，也可能为派生版本；这一实现选择须由PPA、协议验证成本和客户窗口决定。CXL.cache或一致性代理不在默认池化版本中隐含承诺；若客户要求，另列完整协议与一致性测试。
+硬件页的`rate=16/32/64`都标作FLIT Mode；16/32不能直接解释为传统
+Gen4/Gen5 non-FLIT。严格模式按实际链路模式计编码和服务开销；HTML
+`rate×lanes/8×236/256×packing`保留为参考公式，并标明低速编码近似。
 
-### 4.2 功能需求矩阵
+HTML可调`reqHeader/cplHeader`是开销假设，严格模式由所选FLIT格式/
+OHC/事务推导合法头部。HTML `tagCeiling`表32/256/768/15360仅是参考
+模式的预算校验；严格模式按规范能力与路径选择合法Tag集合。
 
-功能需求按SC-01至SC-07及B-01至B-07拆解；MUST作用于表中指定交付版本，AI/CXL版本能力不隐含纳入通用PCIe版本。
+`cplSplit=rcb`用于高Completion率敏感性分析，不把RCB当成无条件最大
+payload。HTML中的64B RCB默认不证明XPU-to-XPU配置合法；严格模式必须
+补充端点角色并验证RCB，非法配置拒绝或要求显式参考模式。
 
-| ID | 需求定义 | 验收重点 | 优先级/来源 |
-|---|---|---|---|
-| F-01 | 实现PCIe 6.0 64GT/s PAM4、FLIT、FEC/CRC及对应重放；兼容Gen1–5，各端口混代组合按矩阵验证 | 协议VIP、速率/宽度切换、混代互操作；FLIT与non-FLIT边界转换 | V1 MUST；STD W1 |
-| F-02 | 支持配置、Memory Read/Write、Completion、Message及地址/BDF/隐式路由的适用行为 | 枚举、BAR、64-bit地址、路由更新、Unsupported Request/错误报文 | V1 MUST；STD |
-| F-03 | 支持同层次合法P2P数据路径与可配置ACS | CPU不搬运数据条件下XPU–XPU/XPU–NIC传输；隔离策略生效 | V1 MUST；B-01/02 |
-| F-04 | 端口宽度支持x2/x4/x8/x16；x1单列可选；明确分叉边界、各端口独立代际与任意合法端口上行角色 | 分叉/降宽/混代、lane reversal/polarity及角色配置矩阵 | V1 MUST；COMP W12；x1 TARGET |
-| F-05 | 144-lane配置支持4个Host接入与4个NTB接口；Host、NTB和虚拟分区数独立定义 | 窗口/doorbell/scratchpad、枚举和域隔离；分区资源另核算 | V1 MUST；COMP W12；分区容量TARGET |
-| F-06 | 保持PCIe ordering、TC/VC、P/NP/Cpl信用与前进性，支持适用的Relaxed Ordering/ID-based规则及设备级策略 | 多源混合、信用耗尽、长尾与死锁压力验证；不得全局随意重排 | V1 MUST；STD |
-| F-07 | 支持SR-IOV设备透传及必要的ARI、ATS/PASID/PRI报文路由策略 | 主机IOMMU与虚拟化互操作；Switch不充当通用地址翻译代理 | V1 MUST适用行为；STD/B-02 |
-| F-08 | AER、DPC、热插拔、复位、链路降级/恢复、ECRC/poison处理及日志 | 注错后影响域受限，无静默数据损坏；不承诺故障期间无暂停 | V1 MUST；COMP W2 |
-| F-09 | 支持带内配置与带外管理、可观测性、安全启动/签名升级能力 | CSR/SDK、固件回滚、权限控制、拓扑/错误/性能导出 | V1 MUST；ARCH/COMP W4 |
-| F-10 | 广播/多播为显式的组、域、合法地址窗口和数据操作 | 1→N仅给授权目的；屏蔽成员、慢接收者、组更新、重放均正确 | V1-A MUST；B-03/04 |
-| F-11 | 定义动态多播路径：预配置组+报文选择，或明确的目的bitmap描述符 | 不能每token等待管理CPU改表；校验非法bitmap、代际号与更新原子性 | V1-A TARGET；W10/SIM |
-| F-12 | INC先实现固定功能Reduce/ReduceScatter+复制/分发，CCL组合AllReduce/AllGather | INT32、FP32、BF16→FP32累加候选；顺序、溢出、NaN/Inf与误差合同明确 | V1-A TARGET；BIZ/COMP |
-| F-13 | INC必须有上下文、参与bitmap、epoch/sequence、超时、重试去重与结果提交 | 同一分片不会重复累加；失败可中止/清理/回退；不宣称断电exactly-once | V1-A MUST；ARCH |
-| F-14 | All-to-Allv支持不均匀路由与拥塞隔离；多播仅加速有重复数据的子流量 | 专家映射、token路由和combine路径均验证 | V1-A MUST；B-04 |
-| F-15 | CXL.io/mem协议交换、端口角色、HDM相关路由、FM/CCI与资源隔离 | Type-3 SLD/MLD按版本列功能，绑定/解绑需满足OS安全流程 | V1-C MUST；W6 |
-| F-16 | CXL pooling与sharing分开；多级/PBR及动态容量逐项可选 | Host数、LD数、地址范围与迁移流程分别验证；无FM不能称完整池化 | V1-C MUST/STUDY；STD |
-| F-17 | 适用的IDE/DOE/SPDM、调试锁定与租户权限需给出能力矩阵 | 必须量化加密和调试模式对latency/功耗的影响 | TARGET；客户安全合同 |
+## 4. 功能需求与模式
 
-| F-18 | 支持局部端口重配置、热插拔、DPC/eDPC与surprise-removal read tracking | SC-02/03；冻结在途事务处理，验证故障端口外的数据与隔离合同 | V1 MUST；COMP W12 |
-| F-19 | 提供FLIT性能计量、注错、包生成、loopback与分层trace | SC-01/02/07；计数单位/时间戳/触发/溢出可读，注错仅在授权测试模式 | V1 MUST；COMP W12；ARCH验收 |
-| F-20 | 提供带内、I2C管理与MCTP接口；I3C及OpenBMC集成单列能力 | SC-03；寄存器/消息、权限、超时、升级和管理失联处理 | V1 MUST；I3C/OpenBMC TARGET；COMP W11/W12 |
-| F-21 | 管理处理器复位/固件更新与交换数据面隔离；无中断更新为单独目标 | SC-03/07；验证持续流量、配置保留与失败回滚；不扩大为整机无停机保证 | V1 TARGET；COMP W11；ARCH验收 |
-| F-22 | 支持PCIe KV Cache appliance的数据通路与系统接口定义 | SC-02/06；冻结存储/内存访问路径、DMA主体、同步与错误反馈；CXL仍独立验收 | V1 TARGET；COMP W11；BIZ |
+### 4.1 必须区分的模式
 
-PCIe广播不是复制任意TLP。禁止复制具有副作用的MMIO、配置写及普通Read/Completion到多个设备。AI扩展应定义专用BAR/descriptor、组内地址映射、授权及缓冲区所有权；通用端点不支持该扩展时走普通单播。
+- `lab_reference`：复现HTML sizing及现有事件近似，保留输入默认值、
+  公式、截短和统计口径。结果标记“估算/参考”，不作协议正确性证据。
+- `pcie6_timing`：gem5中的有限资源、合法事务、ordering和逐跳反压。
+  可先用TLP服务预算近似FLIT，结果必须标记粒度和未实现条款；详细FLIT
+  才进一步实现packing、Shared FC与replay状态。尚未实现的能力拒绝。
+- `controller_detail`：可选的databook接口细化，包含TRGT1/XALI beat、
+  DBI配置代理等。不得成为硬件页解析sizing/首版timing的强制依赖。
 
-## 5. 物理通道、端口、节点与带宽配置
+### 4.2 功能矩阵（保留ID，重新定义验收范围）
 
-### 5.1 IP参数与候选芯片配置
-
-| ID | 参数 | 候选定义 | 来源/冻结方法 |
-|---|---|---|---|
-| IP-01 | lane总数 | IP支持64/104/144配置；144重点评估 | BIZ/COMP W2/W3；PPA决定首发配置 |
-| IP-02 | PHY分组 | 144-lane可按9个x16等价bank规划；实际分叉受PLL/时钟/布局约束 | ARCH；PHY供应商接口确认 |
-| IP-03 | 逻辑端口数 | 全x16为9口；全x4为36口；若允许全x2为72口 | CALC；72口需要独立MAC/LTSSM/资源支持，不由lane数自动获得 |
-| IP-04 | 上下行角色 | 任意合法端口可配置为上行；速率/宽度/角色配置逐端口管理，遵循分区拓扑 | COMP W12；配置切换时的停流/复位边界独立验证 |
-| IP-05 | Host/NTB/分区 | 144-lane版本4 Host、4 NTB；4虚拟分区为容量搜索点 | COMP W12；Host/NTB为MUST，分区容量TARGET，不由NTB数推导 |
-| IP-06 | 系统节点规模 | V1先覆盖4/8 XPU；扩展模拟16/32/64 XPU | BIZ/SIM；不是单芯片接入承诺 |
-| IP-07 | Tags/read tracking | 明确支持的扩展Tag能力和每端口实际outstanding；候选扫64/256/1024 | STD能力与物理资源分离；用BDP和completion行为冻结 |
-| IP-08 | 数据接口 | 协议适配器后采用内部cell+metadata；宽度/频率/并行slice可参数化 | ARCH；不能直接套用Ethernet MAC带宽口径 |
-| IP-09 | 管理/DFT | CSR、APB/AXI类管理口、JTAG、scan/MBIST、SRAM ECC、计数器接口 | ARCH；交付RTL、约束、模型、寄存器与验证包 |
-| IP-10 | PHY责任 | PCS/FEC/LTSSM/SerDes归属、PIPE或专用边界、SRIS/SRNS、时钟复位与延迟分别签接口表 | MUST；数字core与含PHY芯片时延分别验收 |
-
-| IP-11 | MPS/报文资源 | 最大支持1KiB payload【TARGET】；MRRS、Completion分段及buffer独立配置 | COMP W12；不得将MPS当成MRRS或应用消息大小 |
-| IP-12 | 诊断与管理模块 | 分离FLIT计量/trace、注错与管理适配；提供MSI-X、watchdog和管理中断接口 | COMP W12；CPU软核/硬核/外置由集成版本选择【ARCH】 |
-| IP-13 | 故障与在线维护隔离 | 端口独立复位/配置域，管理CPU与数据面分离，定义CSR持有与回滚状态 | COMP W11/W12；以F-18/21故障注入验证 |
-| IP-14 | 大radix扩展 | 保留160/320-lane容量模型搜索；本代仍为64/104/144-lane目标配置 | COMP W11；STUDY，需新PPA/封装/端点预算，不作为当前交付范围 |
-
-PCIe lane为一组TX和一组RX的全双工通道；144 lanes并非144根差分线。封装需容纳144对TX与144对RX，再加电源地、参考时钟和管理引脚；封装/PCB可实现性必须与数字IP同步评估。
-
-### 5.2 统一带宽记账（十进制GB/s）
-
-64GT/s PCIe6每lane单向原始线速为8GB/s；PAM4每symbol两bit不能再把64GT/s乘二。x16为128GB/s单向、256GB/s双向合计。以下都未扣FLIT、TLP、流控、空闲、重放及软件开销。[W1]
-
-| 配置 | 端口数 | 单向每口raw | 全部端口TX容量之和 | TX+RX合计 |
-|---|---:|---:|---:|---:|
-| 64 lanes | 4×x16等价 | 128GB/s | 512GB/s＝4.096Tb/s | 1024GB/s＝8.192Tb/s |
-| 104 lanes | 6×x16+1×x8示例 | x16 128GB/s | 832GB/s＝6.656Tb/s | 1664GB/s＝13.312Tb/s |
-| 144 lanes | 9×x16等价 | 128GB/s | 1152GB/s＝9.216Tb/s | 2304GB/s＝18.432Tb/s |
-
-“全部端口TX容量之和”不等于一次切割的单向bisection，也不等于应用payload。144 lanes若切为72:72，两侧各576GB/s，因此该切割每方向raw上限576GB/s、双向合计1152GB/s。若切为64:80，每方向上限受较小侧限制，为512GB/s。内部Fabric吞吐设计应同时验证全部端口并发合法置换、切割容量和不对称端口，不应只引用一个Tb/s数字。
-
-### 5.3 144-lane系统配置示例
-
-| 配置 | lane分配（总计144） | 直连设备示例 | 每方向raw/过订阅解释 |
-|---|---|---|---|
-| T1 八卡扇出 | 1×x16 Host＋8×x16 XPU | 1 Host＋8 XPU | Host 128GB/s、XPU合计1024GB/s；全XPU对Host为8:1；同层P2P不经Host上行 |
-| T2 混合I/O | 2×x16 Host＋4×x16 XPU＋2×x16 NIC＋4×x4 SSD | 2 Host＋4 XPU＋2 NIC＋4 SSD | Host256GB/s、XPU512、NIC256、SSD128；所有下行到Host为3.5:1；双Host须分区/NTB等合法语义 |
-| T3 对称级联 | 4×x16下行＋4×x16级联＋1×x16管理Host | 4 XPU＋相邻交换芯片 | XPU侧512GB/s、级联512GB/s为1:1；额外Host流量会争用，必须纳入负载模型 |
-| T4 高扇出 | 1×x16 Host＋16×x8下行 | 1 Host＋16设备 | 每下行64GB/s；不是16个x16 XPU；Host聚合仍8:1 |
-
-上行/下行是拓扑角色，PCIe链路本身均全双工。“8:1”仅针对所有下行同时流向Host的特定cut；对P2P、AllReduce、MoE不能照搬该比例。
-
-### 5.4 多节点候选拓扑：32 XPU双层Clos
-
-用于仿真的可核算示例，不作为已验证产品配置：8颗leaf，每颗使用4×x16 XPU＋4×x16 spine uplink＋1×x16 Host；4颗spine，每颗使用8×x16连接8颗leaf，余1×x16可保留。共12颗144-lane芯片、32个XPU，每个XPU单平面128GB/s单向raw。leaf下行/上行各512GB/s，端口预算1:1；跨leaf路径经过leaf–spine–leaf共3颗交换芯片，同leaf为1跳。
-
-该拓扑在带宽上可构造，但普通PCIe透明层次不允许像Ethernet一样任意闭环/多路径转发。必须明确采用专用Fabric模式、NTB/分区、确定性路径、地址域和顺序策略；没有这些能力时只能使用合法PCIe树并接受相应过订阅。因此“多路径”“自适应路由”不能进入V1标准透明交换的默认承诺。
-
-若XPU只有一个x16端口，换成多plane交换芯片不会凭空增加其带宽。多plane需要更多XPU链路资源或在固定总带宽下分拆；须同时给出XPU端口预算与交换芯片BOM。
-
-## 6. 性能需求与测量合同
-
-### 6.1 时间戳边界
-
-| 指标 | 定义 | 包含/不包含 |
+| ID | 需求 | 验收条件 |
 |---|---|---|
-| L_core | 入口协议适配器向Fabric交付首个合法路由单元，到出口适配器接收对应首单元 | 包含分类/查表/仲裁/内部排队；不包含PHY、入口FLIT收齐/FEC、端点和PCB |
-| L_pin | 入口指定FLIT首bit到达RX引脚，到对应输出FLIT首bit离开TX引脚 | 包含PHY/PCS/FEC、FLIT装配、时钟域与Fabric；须写明包型、packing、宽度与gen |
-| RTT_pin_loop | 发起端口TX请求首bit，到同端口RX返回Completion末bit | 包含两向链路、2次switch穿越、响应端处理与序列化；不含发起端软件 |
-| RTT_XPU | XPU提交指定read/atomic请求，到指定数据/完成状态可被该XPU消费 | 包含端点栈、NoC、内存访问与链路；必须固定同步和计时点 |
-| T_collective / T_app | 整次collective或模型step/token的完成时间 | 包含消息数量、算法阶段、依赖、计算通信重叠；不能用L_core替代 |
+| F-01 | 支持显式PCIe6协议profile与参考模式 | 每份结果保存模式、粒度、已覆盖条款及近似 |
+| F-02 | MemRd/MemWr/CplD拆分、路由与完成 | 规范子集合法；字节守恒，无重复完成 |
+| F-03 | 单域P2P与发起/响应端口比 | 单颗与级联路径正确，两个方向分别争用 |
+| F-04 | 接受硬件页链宽/速率/端口参数 | 校验schema、模式、lane/端口预算；不强制144 lanes |
+| F-05 | 域与可达性显式 | 首版透明单域；多Host/NTB仅独立扩展 |
+| F-06 | timing模式ordering、FC与前进性 | 有限队列、资源释放驱动信用、可排空；参考模式另标理想回收 |
+| F-07 | 每Function Tag与实际预算 | 分开统计；参考模式保留均分聚合近似 |
+| F-08 | 异常与未完成请求可见 | 非法配置拒绝；仿真截短、容量不足、无样本明确报告 |
+| F-09 | 版本化配置/结果及来源 | normalized输入、版本、seed、模式与时间窗口可重放 |
+| F-10 | 广播作为可选扩展 | 普通Read/Write不隐式复制 |
+| F-11 | 动态多播作为可选扩展 | 另定义组、权限、慢成员与资源合同 |
+| F-12 | INC作为可选扩展 | 另定义数值和有限算力合同 |
+| F-13 | AI上下文/epoch/重试 | 启用AI服务前独立验证，不阻塞核心lab |
+| F-14 | 非均匀通信/热点 | 首版8→1；后续All-to-Allv流量可映射 |
+| F-15 | CXL独立profile | 不把PCIe内存事务仿真称作CXL.mem支持 |
+| F-16 | pooling/sharing独立范围 | 后续定义，不作为首版验收 |
+| F-17 | 权限与未知能力 | 不支持的配置不得静默启用 |
+| F-18 | 端口状态/故障扩展 | 首版可预设link-up，注明未模拟训练/热插拔/DPC |
+| F-19 | 实验计数与trace | 输出payload/TLP/FLIT估算/Cell、stall与队列峰值 |
+| F-20 | 离线JSON交换 | 保留现有workspace与hardware-calibration两种格式的区别 |
+| F-21 | 快照与结果绑定 | 修改输入后旧结果失效或仍绑定旧配置，不能误标为新结果 |
+| F-22 | workload适配 | 流量来源可追溯；估算流量不称闭环模型性能 |
 
-所有latency必须注明首bit/末bit、空载/负载、典型/最大/P99、是否包含加密/FEC/重试。L_core以“合法路由单元可用”为起点，测量实现须暴露valid/ready事件，避免只测组合查表延迟。
+### 4.3 Databook的补充细化，不扩大基础范围
 
-### 6.2 性能需求矩阵
+DWC是Gen5单端口controller。以下保留F-23–F-32作为细化ID，除实现资源
+所有权所必需的合同外，其接口级复现只在`controller_detail`验收。
 
-| ID | 指标与目标值 | 来源属性 | 条件与验证 | 状态 |
-|---|---|---|---|---|
-| P-01 | 64GT/s/lane；x16单向raw 128GB/s | STD W1 | 全lane、目标PVT、合规信道/电气规范 | MUST |
-| P-02 | 单跳L_core<100ns | BIZ＋ARCH；W12的90ns cut-through为对标，测点不同，不等同L_core | Gen6 x16、单播、空载/无出口竞争、指定64B read与64/256B write；RTL+时序/CDC核算 | TARGET |
-| P-03 | L_pin先扫90/100/125/150ns | ARCH/SIM | 相同包型下含实际PHY/FEC；最终以接口延迟和实测冻结 | TARGET，不预置保证 |
-| P-04 | RTT_XPU<250ns | BIZ挑战目标，无一手竞品证明 | 单hop、Gen6 x16、短PCB、无retimer、单outstanding、64B读回、无重试；实际XPU与内存类型固定 | TARGET；预算不闭合不得发布 |
-| P-05 | 大块payload吞吐≥95%协议模型上限 | ARCH；不是95% raw线速 | ≥4KiB应用数据、明确MPS/MRRS、充足outstanding、无竞争/重试；固定FLIT packing和TLP mix | TARGET |
-| P-06 | 64B payload处理达到该报文组合的合法协议速率 | BIZ/COMP趋势，非照搬Ethernet64B | 分别测posted write、read request及completion、packing、IOPS与GB/s；全端口并发 | TARGET |
-| P-07 | 满端口合法置换无额外Fabric容量瓶颈 | ARCH；COMP无阻塞方向 | 满注入、无目的争用、供给充分；与P-05协议模型比较；非任意incast均线速 | MUST功能/TARGET性能 |
-| P-08 | 70%可持续负载下P99 L_core≤2×空载基线 | ARCH试验门槛，待BIZ校准 | 预定义均匀非过订阅矩阵；另报热点/突发，不把均匀结果推广 | TARGET/SIM |
-| P-09 | 广播输入只注入1份payload；每出口受链路与协议上限约束 | BIZ/ARCH | 扇出2/4/8/16/32、含慢接收者；记录总出口量与源注入量，不写“免费N倍带宽” | V1-A TARGET |
-| P-10 | INC在目标collective上有可复现净收益 | BIZ/COMP W4 | 对同拓扑同频率的最佳合理软件/算法基线；扫描收益1.2/1.5/2倍，不预承诺2倍 | V1-A TARGET/SIM |
-| P-11 | 功耗/面积/温度无现成冻结数值 | ARCH/PPA | 逐项给PHY、SRAM、core、INC、CPU、封装余量；输出典型/满负载/最坏 | 冻结前必补 |
-| P-12 | RAS恢复时延与失效概率单列 | STD+BIZ | 注错统计、恢复时间分布、错误域；用客户SLA冻结，不凭空指定MTBF | 冻结前必补 |
-
-| P-13 | x16→x16 cut-through ≤90ns【TARGET】 | COMP W12；原厂给90ns，未完整公开测点/包型/负载 | 为本设计独立建立首末bit、入口/出口、空载与包型合同；同口径前不得比较，不能代替P-02/04 | TARGET；RTL/PHY/板级闭合 |
-
-“95%协议模型上限”需由独立的报文级参考模型计算，不能以被测实现的自测峰值作为分母。必须报告raw、理论payload上限、实际payload、事务速率与有效利用率五项。
-
-【竞品时延注】PEX90000 PB105第2页明确写出90ns、x16→x16 cut-through，已替代此前“Gen6精确时延未确认”的状态。该值属于系列公开指标，尚不能认定为本文件定义的L_pin、L_core或全PVT最大值。[W12]
-
-### 6.3 RTT<250ns可行性预算
-
-对同一路径两次经过一颗switch的请求/响应事务：
-
-RTT = L_switch_req + L_switch_cpl + L_links_roundtrip + L_endpoint_response + L_endpoint_stack + L_serialization_and_alignment + L_retry_or_queue。
-
-各项必须互斥：若L_switch使用L_pin，则switch内PHY/FEC不再计入别处；若使用L_core，则需额外补全部PHY/PCS/FEC/FLIT边界项。端点stack与response也要避免重计。
-
-以下仅为反推约束的假设例，非测量结果：若两次L_pin各100ns，链路往返及剩余序列化/对齐合计20ns，则250ns只剩30ns给响应端点、内存及其他处理；若L_pin各125ns，两次switch本身已消耗250ns。因此<100ns core不能推出<250ns RTT，甚至100ns pin也不足以保证该RTT。
-
-250ns拆分为两个独立验证项【验证范围】：①片上/板级快速响应器的RTT工程探索；②实际XPU到实际XPU内存的业务RTT。前者通过不代表后者通过；后者的候选探索区间可扫250/500/1000ns，但最终阈值必须来自工作负载与客户要求，不能直接升格为放宽后的合同。
-
-## 7. 底层微架构与容量推导
-
-### 7.1 Fabric、buffer与流控
-
-| ID | 设计需求 | 初始搜索空间 | 冻结依据 |
-|---|---|---|---|
-| A-01 | cell化交换、端口适配器分离，逐级记录credit与ordering元数据 | 内部cell 64/128/256B | 包效率、切穿收益、SRAM粒度、ECC、PPA |
-| A-02 | 内部服务能力不小于协议适配器可持续注入并留控制开销 | raw等价容量的1.0/1.2/1.5倍作搜索点 | 合法packing、小包、广播复制、银行冲突与时钟余量 |
-| A-03 | P/NP/Cpl与业务队列独立；至少保证Completion前进性 | VC资源按端口需求参数化；不机械指定“两个VC足够” | PCIe/CXL/SUE语义分别建立依赖图；形式化+压力验证 |
-| A-04 | 共享buffer+必要的目的隔离/VOQ候选 | 单port资源等效64/128/256KiB；总SRAM按共享策略扫描 | 信用往返、incast、突发和P99，不以静态总容量代替隔离验证 |
-| A-05 | 广播引用计数、可回收copy descriptor与慢成员策略 | 实际端口扇出上限；多播组256/1K/4K候选 | 组生命周期、任务并发、模型并行与epoch；不是竞品组数 |
-| A-06 | INC输入流控和缓冲独立核算 | 上下文64/256/1024；分片256B–4KiB搜索 | 并发job/communicator、层流水与超时占用 |
-| A-07 | 拥塞可观测与QoS | 队列水位、stall原因、age、公平性、目的/分区占用 | 隔离bulk与latency流；死锁/饥饿/信用泄露验证 |
-
-BDP推导示例：Gen6 x16 raw 128GB/s、假设credit闭环往返250ns，数据在途量约32,000B（31.25KiB）。这只是该假设下的链路数据占用尺度；真实信用按头/数据、流量类别、包型及规范分配。不能据此直接宣布每port 32KiB足够。
-
-若64B读数据希望达到128GB/s的理想payload值，且事务RTT假设250ns，N_outstanding≥128×10^9×250×10^-9/64≈500。此计算故意忽略协议开销，只用于检查量级；需再核对端点请求率、completion打包、Tag能力与read tracking存储。对一个4KiB传输，理想在途请求量约8，但MRRS、Completion分段、MPS与RCB可能改变实际事务数。
-
-内部接口例：一条1024bit@1GHz通道仅128GB/s理论吞吐，刚等于x16单向raw且没有控制/空闲余量。144-lane全入口raw 1152GB/s需要至少9条这种等价并行通道，真实数量或频率应按协议元数据、仲裁气泡和PPA增加。这个数字只说明资源下界，不强制采用9条中央总线。
-
-### 7.2 INC算力不能只写“支持归约”
-
-对G路、每路payload速率R（GB/s）、每元素w字节的归约，理想累加算力至少为(G−1)×R/w Gop/s，输出至少R GB/s；输入总量为G×R，另计重传、精度转换和复制带宽。
-
-以8路、每路目标100GB/s（本文假设值）、FP32为例，归约需要至少175G add/s，输入800GB/s、输出100GB/s。若1GHz、每个运算单元每cycle完成一次add，至少175个等价add/cycle吞吐；流水延迟与状态存储另算。BF16输入转FP32累加会增加元素率和转换资源。不得以FP32理论算力同时承诺BF16吞吐，也不得忽略累加器读写带宽。
-
-数值验收必须区分INT32精确规则与浮点误差。浮点归约顺序改变通常不能保证与任意软件ring逐bit相同，应冻结可复现模式、参考算法、绝对/相对误差、异常值及随机/对抗输入测试。
-
-## 8. 工作负载仿真与规格反推计划
-
-SimAI流量测量与规格提取工作项见**附录B**；本章定义实验矩阵与规格反推接口。参考引用统一见**附录C**。
-
-系统级仿真工具为 **SimAI / ASTRA-sim**【工具范围】。SimAI资料显示由workload、训练框架、collective和网络仿真层构成，可用于结构和负载评估，但不应默认等价于完整PCIe/CXL周期精确模型。[I4][W9]
-
-### 8.1 分层方法与工具能力边界
-
-1. **业务层：**真实trace或AICB生成dense训练、dense推理和MoE通信；SimAI/ASTRA-sim用于并行策略、拓扑、通信阶段和计算通信重叠分析。推理须补充arrival、batch、prefill/decode与KV行为，不能把训练step时间直接当TPOT。
-2. **协议/网络层：**构建或扩展PCIe交易模型，加入posted/non-posted/completion、FLIT packing、Tag/credit、ordering、重放和端点处理。CXL另加内存事务、Host路径和必要一致性模型。SUE-T的请求/响应及LLR/流控按目标版本单独建模。
-3. **微架构层：**周期模型与RTL验证仲裁、SRAM冲突、buffer、multicast、INC和实际core延迟。
-4. **物理层：**PHY供应商模型、SI/PI与布局时序核算pin延迟、信道、FEC/误码、retimer、PVT和功耗。
-5. **校准闭环：**协议分析仪/FPGA/评估板测量→模型校准→业务trace复放。系统模拟器不能单独证明100ns core、250ns RTT、PCIe合规或SerDes BER。
-
-SimAI与ASTRA-sim可能共享或派生部分实现，二者结果相近并非独立验证。提交中需固定commit、network backend、配置和修改补丁。
-
-### 8.2 最小实验矩阵
-
-| 实验 | Workload/规模 | 扫描变量 | 输出与决定项 |
-|---|---|---|---|
-| S-01 | 合成P2P 4/8 XPU，64B/256B/4KiB/1MiB | Gen5/6、x8/x16、1/2/3hop、MPS/MRRS、outstanding | payload曲线、RTT分布；P-02/03/05/06、IP-07 |
-| S-02 | Dense训练，TP/DP/PP组合，8/16/32/64 XPU | 144-lane T1/T3/Clos、上行1:1/2:1/4:1/8:1 | step时间、暴露通信占比、MFU；lane与级联配比 |
-| S-03 | Dense推理prefill/decode，TP=4/8/16 | 请求长度、batch、并发、250/500/1000ns事务时延 | TTFT、TPOT、tokens/s、P99；RTT和带宽投资优先级 |
-| S-04 | MoE EP=8/16/32/64，trace或可复现routing | top-k、token skew、专家映射、动态多播/单播、热点 | dispatch/combine P99、All-to-Allv效率、组表/队列规格 |
-| S-05 | AllReduce/RS/AG/Broadcast，1KiB–256MiB | INC on/off、ring/tree/合理硬件基线、扇出、组数、上下文 | collective时间、总字节、INC净收益、数值误差与算力 |
-| S-06 | 混合XPU/NIC/SSD I/O | 流量占比0/10/30/50%、incast、慢成员、分区数 | latency隔离、HOL、公平性、buffer峰值；QoS策略 |
-| S-07 | CXL冷KV/容量层 | hit/miss、Host中转/直接、读写比、内存池容量 | 容量收益、带宽和TPOT损失；是否应启用CXL版本 |
-| S-08 | 故障与退化 | lane降宽、Gen降速、链路错误、成员退出、重试 | 恢复时间、可用吞吐、上下文清理、错误爆炸半径 |
-
-以上规模、时延档位、比例和组数都是实验设计参数，没有模拟结果含义。全因子组合过大时先单因素灵敏度筛选，再对关键交互项做组合实验；保存未运行项而非补成估计结果。
-
-### 8.3 从业务预算反推指标
-
-如果某场景每token暴露通信C次，允许通信占用T_comm，则每次平均暴露预算约T_comm/C；复杂collective含多个阶段，不能把它全部分配给一次switch穿越。例如假设每token有60次不可重叠collective、总通信预算0.6ms，则平均每次10μs；此假设只能用于分析，不能推出RTT必须250ns。需要将collective分解为启动开销、传输量/B_eff、阶段数、拥塞与端点时间，再求switch延迟变化对TPOT的边际收益。
-
-冻结方法：在同一组客户trace上寻找满足TTFT/TPOT/吞吐限制的最小lane/上行/INC/buffer配置，比较100→80ns和x8→x16、单跳→多跳的单位成本收益；输出Pareto前沿与失效条件。业务SLA、成本与功耗上限目前尚未给出，不能虚构最优点。
-
-## 9. 待完善工作与冻结门
-
-| ID | 待办/责任角色 | 必须形成的证据 | 阻断哪些承诺 |
-|---|---|---|---|
-| T-01 | 产品/客户：锁定至少一个8卡平台与一个扩展平台 | RC/XPU lane预算、Gen、P2P限制、CCL、采购/样片窗口 | 首发64还是144、Host域、级联能力 |
-| T-02 | 竞品/系统：获取Broadcom、Astera、众星微数据手册和板卡 | 同条件包型、time boundary、吞吐/功耗、CXL与INC能力矩阵 | 竞品精确对标与宣传措辞 |
-| T-03 | 架构/PHY：拆解90ns cut-through、100ns core与250ns RTT预算 | 每级pipeline/CDC/PHY/FEC/FLIT/端点预算及测量点 | P-02/03/04 |
-| T-04 | 仿真/算法：完成S-01至S-06并先校准基础P2P | trace、commit、配置、误差、P50/P99与参数敏感性 | buffer、上行配比、INC和多播组数 |
-| T-05 | 协议/DV：建立标准合规矩阵 | PCIe规范修订、ECN、每feature测试、VIP/形式化结果 | V1功能冻结 |
-| T-06 | CXL/软件：冻结Host与Type-3组合 | CXL版本、FM/CCI、HDM/LD、OS流程、RAS与S-07 | “支持CXL内存池化” |
-| T-07 | 架构/软件：定义AI扩展语义 | BAR/descriptor、地址映射、租户、重试去重、浮点误差与CCL插件 | 广播、INC、AllReduce加速 |
-| T-08 | 后端/封装：64/104/144三个点的PPA/SI比较 | process、频率、SRAM、SerDes数量、封装引脚、热与测试成本 | 144-lane量产目标与价格/功耗 |
-| T-09 | 标准/架构：跟踪UALink/SUE-T/ESUN | 明确规范版本、端点合作和PHY差距；Chiplet接口复用评估 | 多协议或标准兼容宣传 |
-| T-10 | 系统/DV：故障与安全验收 | 注错分布、恢复时间、隔离矩阵、签名升级/回滚 | 生产可用性与安全能力 |
-
-验证里程碑【GATE】：G0业务与端口预算→G1参考模型与竞品可比基线→G2微架构/PPA/性能目标冻结→G3RTL功能与性能闭合→G4硅/板级互操作与业务验证。G2前不能把SIM项写成确定spec；G4前不能称已达到实测性能。日期由客户平台节点倒排，本文件不虚构项目排期。
-
-### 9.1 一条需求的冻结记录模板
-
-需求ID｜版本/配置｜MUST/TARGET/STUDY｜来源类型｜原始来源与页码/URL｜业务原因｜数值与单位｜方向/层级｜时间戳边界｜流量/包型/温度/负载｜参考模型｜验证方法｜责任方｜冻结证据/日期｜变更影响。
-
-示例：P-02｜144-lane V1｜TARGET｜BIZ+ARCH｜业务输入U1｜降低小消息穿越开销｜L_core<100ns｜单向单跳｜入口合法路由单元valid至出口accept｜Gen6 x16、64B read、空载、无retry、PVT角待定｜周期参考模型｜RTL性能回归+时序闭合｜架构/DV/后端｜未冻结。
-
-## 10. 产品能力描述
-
-“面向AI服务器板内与机箱内高速互连的PCIe 6.0 Switch IP，支持每lane 64GT/s PAM4与256B FLIT、FEC/CRC，提供可参数化lane/端口配置、P2P与多主机管理。最高144-lane配置及低于100ns的片上交换延迟为候选设计目标。AI增强版本规划硬件广播与集合通信卸载；CXL版本规划内存扩展/池化，具体能力以协议版本、端点适配和系统验证结果为准。”
-
-在完成对应验证前，不使用“RTT<250ns”“原生支持CXL池化”“任意GPU互通”“广播/INC线速”“1024节点直连”作为无条件产品承诺。
-
-## 11. 传统Ethernet IP与PCIe 6.0 Switch IP特性差异
-
-### 11.1 比较范围
-
-【范围】Ethernet侧分为MAC/PCS IP与L2/L3 Switch IP：MAC/PCS负责端口帧与编码，交换IP另含查表、队列、调度和复制。PCIe侧为含协议端口适配的Switch IP；只拿Ethernet MAC与完整PCIe Switch比较会遗漏交换功能。以下“传统Ethernet”指标准全双工有线Ethernet，PAUSE/PFC、LAG等为相应配置下的能力，不默认包含RDMA、SUE-T、LLR、CBFC或INC。
-
-| 特性 | 传统Ethernet MAC / Switch IP | PCIe 6.0 Switch IP | 设计影响/需求映射 |
-|---|---|---|---|
-| 业务语义 | MAC提供帧服务；L2/L3按MAC/VLAN/IP转发，通用MAC本身不理解内存事务 | Memory/Configuration/Message与Completion等事务；posted/non-posted行为不同 | 不能只替换Ethernet parser；需事务路由和完成报文规则，F-02/06 |
-| Flow control | PAUSE暂停链路方向；PFC按优先级暂停；未配置时可因拥塞丢帧 | 基于接收资源通告的credit；按VC及P/NP/Cpl的header/data资源约束发送 | 从阈值回压转换为资源账本，维护credit初始化、消耗、更新与防泄漏，A-03/04 [E1][E4] |
-| 流控与拥塞控制 | PAUSE/PFC为逐跳回压；ECN+端点算法可另行调速 | credit解决接收buffer可用性；多源目的竞争仍需调度/限速/队列隔离 | credit不是全网拥塞控制，仍须验证incast、HOL和公平性，F-06、A-07 |
-| 链路重传 | 标准全双工MAC不提供通用逐帧ACK/重传；坏FCS按IP接口丢弃或标错，上层负责恢复 | 链路协议原生可靠性机制；Gen6 FLIT结合CRC/FEC与FLIT重试，不能直接套Gen5逐TLP replay实现 | 增加序号、重放状态、发送副本存储和恢复验证，F-01/08 [E3][E4] |
-| FEC | 取决于PHY速率/编码/媒介；FEC不等于MAC重传 | 64GT/s使用PAM4、FLIT、轻量FEC与CRC | FEC管纠错、retry处理可恢复检测错误，P-03/04 [W1] |
-| 多lane绑定 | PHY可把多条PCS/PMA lanes组成一个Ethernet端口；这是PHY lane分布/对齐 | x4/x8/x16是同一PCIe逻辑Link的宽度，按协议跨lane分配与对齐 | PCIe需width negotiation、deskew和降宽；两者都可能多lane，不能写成Ethernet不支持lane绑定 |
-| 多链路聚合 | 802.1AX/LACP把多个MAC links组成LAG，通常按conversation保持有序分配；单流不自动得到总带宽 | 多个独立PCIe links没有通用802.1AX式LACP；多个端口的聚合由上层软件或专用Fabric定义 | PCIe x16不是16个独立x1 links组成的LAG；F-04、IP-04 [E2] |
-| 带宽扩展 | 多端口/LAG/ECMP按流或其他有序策略分担；一个高速Ethernet端口也可能由多条物理lanes实现 | 增加Link width、代际速率或多个独立端口；多plane需XPU侧匹配 | 每项同时给Link/端口/lane预算，第5章 |
-| Ordering | 以帧/流为主要边界；无通用PCIe read/write/Completion依赖合同 | PCIe ordering与属性、TC/VC及事务类型相关；completion进度不能被普通写流永久阻塞 | Ethernet任意逐包喷洒/重排不能直接移植，F-06 |
-| Buffer | Ethernet交换常按端口/优先级/目的管理共享池与headroom，丢包策略可配置 | 接收buffer、信用通告、事务类别和replay buffer分别核算 | retry副本与接收credit buffer不能当成同一容量，A-03/04 |
-| Broadcast / Multicast | L2广播、多播组和复制为常见交换能力；MAC单口不等于组播交换机 | 不允许任意复制PCIe Memory/Config/Read事务；AI复制必须定义合法数据窗口和目的映射 | 复用复制引擎，不复用无条件flood语义，F-10/11 |
-| 路由与拓扑 | L2/L3转发，LAG/ECMP/路由协议视系统配置 | RC枚举、BDF/地址/隐式路由，标准层次与分区；多路径需独立模式 | FDB/IP route不能等同PCIe路由表，F-02/05、第5.4节 |
-| 训练与恢复 | 链路建立、PHY自协商/训练因标准与媒介而异 | LTSSM、速率/宽度协商、均衡、复位/恢复与热插拔 | PCIe端口状态机与RAS是独立工作包，F-01/08 |
-| 安全/隔离 | VLAN/ACL/MACsec等由选定IP和系统提供 | ACS、分区、地址窗口及适用IDE/DOE/SPDM能力矩阵 | 隔离对象由帧/网络域转为Host与事务域，F-05/07/17 |
-| 软件/管理 | MDIO、统计与交换SDK；RDMA/transport属于额外协议栈 | 配置空间、枚举、驱动、AER、NTB/Fabric SDK及设备兼容 | 交付含配置模型、驱动接口、故障日志与互操作矩阵，F-09 |
-
-【流控细化】PFC在达到暂停条件后发出回压，需要为在途数据预留headroom；PCIe的发送许可来自credit，对应已通告接收资源。两者都受反馈往返时间、粒度、仲裁和错误恢复影响，不能推导为“PCIe天然没有拥塞”或“PFC本身提供可靠重传”。[E1][E4]
-
-【可靠性边界】PCIe链路重试确认的是相邻链路交付，不等于业务read完成、INC结果持久化或跨故障exactly-once。posted write的业务完成需上层显式定义；Gen6 FLIT确认与重试粒度、状态机及定时参数以正式PCIe规范为准。[W1][E4]
-
-### 11.2 从Ethernet交换内核复用到PCIe的模块边界
-
-| 分类 | 模块 | PCIe新增或调整内容 |
+| ID | 补充合同 | 来源 / 适用性 |
 |---|---|---|
-| 可复用结构【ARCH】 | crossbar/cell fabric、SRAM/ECC、队列、仲裁、复制、计数器、DFT | 重新核算PCIe事务类别、吞吐、时钟边界、metadata和顺序合同 |
-| 协议专用【MUST】 | TLP/FLIT适配、PCIe路由、配置空间、LTSSM接口、P/NP/Cpl credit、retry | 不通过简单替换Ethernet头部实现；明确PHY/PCS/Controller与Switch core归属 |
-| 系统专用【MUST】 | RC枚举、ACS、NTB/分区、复位/DPC、Host隔离、软件兼容 | 标准PCIe拓扑验证，设备/驱动联测，F-02/05/07/08/09 |
-| AI扩展【TARGET】 | 多播descriptor、INC上下文、数据格式、CCL插件 | 对应SC-04/05；重放去重、慢成员和数值正确性独立验收 |
+| F-23 | 分离controller与application core状态 | §1.1、2.1、P.4；核心架构参考 |
+| F-24 | RADM P/NP/Cpl资源；S/F、C/T、bypass责任 | §2.5页83–87；首版S/F，其余后续 |
+| F-25 | TRGT1提前class halt与在途grant预留 | §4.4.3页328–329；beat接口启用时验证 |
+| F-26 | XALI client、halt稳定及连续供数；普通TX队列归application | §3.3、4.1；不要求lab界面直接配置DWC引脚 |
+| F-27 | USP本地CFG、DSP DBI代理和下游CFG转换 | §3.4.2、P.4.1；配置/枚举扩展 |
+| F-28 | 本地ELBI与transit身份/路由分离 | 页108–110、P.4.1；事务语义必须明确 |
+| F-29 | RADM出队与core资源释放是不同事件 | §3.9；FC backing设计参考，不覆盖Gen6规范 |
+| F-30 | 本地NP发起预留Cpl header/data预算 | §3.23；本地Requester适用，transit不分配本地Tag |
+| F-31 | RX header/data/formation、retry及core SRAM独立计量 | §2.2、5.17–5.21；Gen6布局另定，不强制DWC RAM结构 |
+| F-32 | reset/INTx/PM/RAS跨端口协调 | P.4.3–P.5.1；系统扩展，首版明确缺失 |
 
-### 11.3 SUE-T与增强Ethernet的适用位置
+## 5. 硬件页输入合同
 
-SUE-T/ESUN是Ethernet Scale-Up的演进方向，LLR、CBFC与INC可出现在特定增强芯片/协议中。[W7][W8] 这些能力应列为“增强Ethernet配置”，不能追溯成所有传统Ethernet IP的默认功能。SUE-T端点transport负责的内存语义、请求响应和恢复，与Ethernet Switch的转发/回压边界分别建模；跨PCIe/CXL/UALink的转换另需地址、顺序、权限与错误语义定义。
+HTML内嵌`hardwareFields`是字段名、UI默认值、范围、步长和枚举的直接
+来源。后端不得删除或重命名这些字段。下表完整列出当前字段；实际运行
+须保存原始输入和解析后的有效值。`read/cascade/fixed`条件只控制显示，
+不应把仍存在的隐藏字段误当成已启用行为。
 
-## 附录A：可信竞品规格与性能参数
+GB/s为十进制，KiB为1024B，ns/µs分别换算；频率为MHz。所有“0=自动”
+字段的0是推导请求，不能当作零容量或无限容量。
 
-### A.1 已核实规格与性能指标总表
+| 字段 | 含义/单位 | 默认值 | 范围/枚举 |
+|---|---|---|---|
+| `op` | 事务类型 | read | read / write |
+| `payload` | 每笔应用传输 (B) | 64 | 4–1048576；步长4 |
+| `target` | 每发起端口目标 Payload (GB/s) | 128 | .001–1e5；步长.001 |
+| `offset` | 起始地址 4 KiB 页内偏移 (B) | 0 | 0–4092；步长4 |
+| `mrrs` | MRRS (B) | 4096 | 128/256/512/1024/2048/4096 |
+| `mps` | MPS (B) | 256 | 128/256/512/1024/2048/4096 |
+| `rcb` | RCB (B) | 64 | 64/128 |
+| `cplSplit` | Completion 策略 | mps | mps / rcb |
+| `reqHeader` | 请求 TLP 开销 (B) | 16 | 12–128；步长4 |
+| `cplHeader` | Completion TLP 开销 (B) | 12 | 12–128；步长4 |
+| `packing` | FLIT TLP 区填充率 (%) | 100 | 1–100；步长.1 |
+| `rate` | FLIT Mode 链路速率 (GT/s) | 64 | 16/32/64（FLIT Mode） |
+| `reqPorts` | 活跃发起端口 | 1 | 1–32；步长1 |
+| `cplPorts` | 活跃响应端口 | 1 | 1–32；步长1 |
+| `reqLanes` | 发起端链宽 | 16 | 1/2/4/8/16 |
+| `cplLanes` | 响应端链宽 | 16 | 1/2/4/8/16 |
+| `switches` | 路径经过的 Switch 数 | 1 | 1–8；步长1 |
+| `islLanes` | 级联链宽 | 16 | 1/2/4/8/16 |
+| `chipLanes` | 单颗 IP SerDes lanes | 144 | 1–2048；步长1 |
+| `chipPorts` | 单颗 IP 逻辑端口 | 9 | 2–256；步长1 |
+| `reqMeters` | 发起端链路长度 (m) | .5 | 0–1000；步长.001 |
+| `cplMeters` | 响应端链路长度 (m) | .5 | 0–1000；步长.001 |
+| `islMeters` | 每段级联链路长度 (m) | .5 | 0–1000；步长.001 |
+| `nsMeter` | 单向传播延迟 (ns/m) | 5 | .001–1000；步长.001 |
+| `retimers` | 每段链路 Retimer 数 | 0 | 0–8；步长1 |
+| `retimerNs` | 每 Retimer 单向延迟 (ns) | 10 | 0–10000；步长.01 |
+| `switchNs` | 单次 Switch 穿越 (ns) | 60 | 0–100000；步长.01 |
+| `endpointNs` | 端点处理及其余延迟预算 (ns) | 120 | 0–100000；步长.01 |
+| `rttMode` | 事务 RTT 口径 | derived | derived / fixed |
+| `fixedRtt` | 手动事务 RTT (ns) | 250 | 1–1e6；步长.01 |
+| `creditFixed` | Credit 环路固定延迟 (ns) | 180 | 1–1e6；步长.01 |
+| `ackFixed` | ACK 环路固定延迟 (ns) | 180 | 1–1e6；步长.01 |
+| `functions` | 每发起端口的均分 Function 数 | 1 | 1–256；步长1 |
+| `tagBits` | Tag 字段位宽 | 10 | 5/8/10/14 |
+| `tagBudget` | 每 Function 实际可用 Tag | 768 | 1–16384；步长1 |
+| `trackMode` | Switch 跟踪范围 | transparent | transparent / proxy |
+| `trackExtra` | 跟踪表附加字段 (bit/entry) | 32 | 0–512；步长1 |
+| `requestLimit` | 每发起端口请求率上限 (MTLP/s，0=不限) | 0 | 0–100000；步长.01 |
+| `cplLimit` | 每响应端口 Cpl 速率上限 (MTLP/s，0=不限) | 0 | 0–100000；步长.01 |
+| `margin` | 资源裕量 (%) | 20 | 0–400；步长.1 |
+| `headerCredits` | 每 VC 每类别 H 窗口 (0=自动) | 0 | 0–65536；步长1 |
+| `dataCredits` | 每 VC 每类别 D 窗口 (0=自动) | 0 | 0–1048576；步长1 |
+| `replayFlits` | 每端口 TX Replay 深度 (FLIT，0=自动) | 0 | 0–1048576；步长1 |
+| `clock` | 数据面频率 (MHz) | 1000 | 1–20000；步长1 |
+| `util` | 内部有效利用率 (%) | 85 | 1–100；步长.1 |
+| `channels` | 每端口每方向 IP 物理通道 | 1 | 1–32；步长1 |
+| `portWidth` | 每物理通道位宽 (bit，0=自动) | 0 | 0–65536；步长32 |
+| `slices` | Crossbar / Fabric 并行 Slice | 9 | 1–256；步长1 |
+| `fabricWidth` | 每 Slice 位宽 (bit，0=自动) | 0 | 0–65536；步长32 |
+| `vc` | 每端口 VC 数 | 2 | 1–8；步长1 |
+| `cell` | 内部 Cell 数据区 (B) | 64 | 64/128/256 |
+| `meta` | 每 Cell 元数据 (B) | 8 | 0–128；步长1 |
+| `fabricCreditNs` | 片内 Fabric 槽位返回 (ns) | 40 | 1–1e6；步长.01 |
+| `egressCells` | 每出口每 VC 暂存 (Cell，0=自动) | 0 | 0–1048576；步长1 |
+| `voqDepth` | 每活跃 VOQ 的 Cell 额度 (0=自动) | 0 | 0–65536；步长1 |
+| `activeVoq` | 每入口支持活跃 VOQ 数 | 8 | 1–4096；步长1 |
+| `descriptor` | 每 VOQ Descriptor (B) | 32 | 8–512；步长1 |
+| `poolKiB` | 每入口共享 Payload 池 (KiB，0=自动) | 128 | 0–1048576；步长1 |
+| `burst` | 分析突发倍率 | 2 | 1–100；步长.1 |
+| `burstNs` | 分析突发窗口 (ns) | 250 | 0–1e6；步长1 |
+| `sramFactor` | SRAM ECC / 对齐附加 (%) | 12.5 | 0–100；步长.1 |
+| `simUs` | 仿真时长 (µs) | 12 | 1–100；步长1 |
+| `simArrival` | 仿真发包节奏 | steady | steady / burst |
+
+### 5.1 后端映射要求
+
+| UI字段组 | 必须映射的模型与边界 |
+|---|---|
+| `functions/tagBits/tagBudget` | 本地Requester每Function身份/Tag；proxy和transparent分开 |
+| `rate/*Lanes/*Meters/retimers/*Ns` | 每跳双向link及传播；禁止重复加入完整RTT |
+| `channels/portWidth/clock/util` | 端口内部每方向服务；`util`是预算折减，详细模型不与显式气泡重复扣减 |
+| `slices/fabricWidth` | 并行Fabric服务通道；不是物理Forwarding Slice数量 |
+| `vc/headerCredits/dataCredits` | 参考模式均分窗口；timing模式转换为有backing的合法FC配置，Shared FC补参 |
+| `cell/meta` | 内部cell与metadata，不等于外链FLIT或SRAM sector |
+| `poolKiB/activeVoq/voqDepth/descriptor` | 每入口资源和每芯片descriptor预算分开；物理共享策略另声明 |
+| `egressCells/fabricCreditNs/replayFlits` | 出口staging、内部slots、外链replay分别独立 |
+| `trackMode/trackExtra` | transparent只可选监控；proxy才有本地Requester跟踪表 |
+| `burst/burstNs/simArrival/simUs` | 解析突发预算与实际注入节奏、请求时长、测量窗口分开 |
+
+`chipLanes=144/chipPorts=9`是UI默认值，不是唯一支持的产品配置。
+硬件页没有定义物理3-Slice/3MiB/16-bank；这些只能作为可选microarchitecture
+profile，不能覆盖`poolKiB=128`等UI输入或成为验收前提。
+
+### 5.2 自动资源推导
+
+`lab_reference`必须复现`sizeHardware()`，包括其向上取整和power-of-two
+规则。以下为实现索引；运行输出应包含每项推导的输入、中间值与有效配置。
+
+- 端口位宽：根据协议吞吐对应的Cell服务量与链路raw需求取较大者，除以
+  频率、利用率、`channels`，按32 bit向上取整。
+- Fabric位宽：`max(chipRaw, protocol对应双向Cell总流量)`乘裕量，除以
+  频率、利用率、`slices`，按32 bit向上取整。
+- H/D：按每链路share、目标事务率、credit RTT、裕量和VC均分计算；D至少
+  可容纳最大单TLP数据。自动H/D取整数，不额外强制power-of-two。
+- Replay：`ceil(rawGBps × ackRttNs / 256 × safety)`后向上取2次幂。
+- VOQ/egress：最大单TLP Cell数与解析突发积压取最大，再向上取2次幂。
+- 活跃VOQ：不超过`chipPorts*(chipPorts-1)*3*vc/chipPorts`。
+- Payload pool：非零`poolKiB`为每入口显式容量；0按活跃队列×深度×
+  Cell物理字节推导。`sramFactor`用于附加预算，不能冒充可存payload空间。
+- Fabric slots：按每并行通道带宽×槽位返回时长/Cell物理字节×裕量推导。
+- 跟踪表：Read在途数×裕量向上取2次幂；entry位宽及byte对齐按页面公式。
+
+`pcie6_timing`导入这些建议值后还要验证协议backing与实现拓扑；自动
+sizing值不是协议合规证明。不满足时输出诊断，不能静默扩大显式容量。
+
+## 6. 计算、输出和时间口径
+
+### 6.1 解析计算
+
+必须输出每笔应用传输的MemRd/MemWr数量、每请求CplD分段、正反向TLP
+字节/Cell/credit、在途MemRd、每Function Tag、理论payload上限，以及
+按每发起端口折算的限制项排序。
+
+参考公式：`ops/ns = targetGBps / payloadB`；
+`N_memrd = ceil(ops × requests_per_transfer × rttNs)`。
+Tag在对应MemRd最后CplD到达后释放，不在首包或应用入队时释放。
+
+限制项至少包含：FLIT/TLP与链路cut、Tag、请求率、Completion率、端口
+数据面、Fabric Cell服务、credit窗口、replay窗口。不能只报一个峰值。
+
+RTT分`derived/fixed`：前者按往返传播/Retimer、Switch和端点预算计算；
+后者是输入预算/测点，不抹掉物理路径。参考仿真保留HTML对`extraEndpoint`
+的处理与额外逐跳串行化，故模拟延迟可能大于输入RTT。timing模式分项
+计时并报告实际RTT，不用负残余抵消路径，不重复叠加完整测量RTT。
+
+### 6.2 资源输出
+
+必须对应页面`specView/memoryView`：SerDes/逻辑端口、每方向内部通道及
+位宽、端口与Fabric有效带宽、Cell/metadata、VC/class、Fabric slots、
+出口暂存、逻辑/活跃VOQ、descriptor SRAM、每入口/全芯片payload pool、
+解析MTLP/s与每周期槽位、Tag与可选跟踪表。各链路分别输出credit/ACK
+RTT、目标/配置H/D、突发积压、Replay需要/配置与TX replay SRAM。
+
+### 6.3 事件结果
+
+必须报告每发起端口payload GB/s、样本数、P50/P99/P999 ns、Tag/credit
+stall次数、峰值Tag、VOQ/pool/egress/active-VOQ峰值及其容量，申请/实际
+时长、预热、截短、已完成/未完成数量。零样本明确显示，不能伪造百分位。
+
+HTML当前样本是**单个分段MemRd/MemWr**从首链路launch到最后CplD或写
+到达的时间，不含入队前等待，亦非完整多请求应用传输时延。参考模式保留
+此口径；timing模式另报含排队的事务及应用完成时延，禁止混合比较。
+
+参考事件窗口前20%预热，存在30000 packet预算导致的时长截短；容量检查
+是峰值比较而非阻止入队。timing模式则必须以有限容量实际反压，允许吞吐/
+尾延不同，报告差异原因。两种模式分别显示“参考检查通过”和“有限资源
+模型通过”，不能用前者证明后者。
+
+### 6.4 性能ID与参数化原则
+
+| ID | 当前验收定义 |
+|---|---|
+| P-01 | raw/协议payload/实际payload分别计量，每方向分列 |
+| P-02 | 实际Switch core阶段与排队可分解，默认switchNs不是实测目标 |
+| P-03 | link/Retimer/序列化/packing延迟有明确边界 |
+| P-04 | 输入RTT与实际Read完成时间分别输出；不预承诺250ns |
+| P-05 | 参考bench按HTML阈值核对吞吐，详细模式用独立预算和守恒 |
+| P-06 | 64B与4KiB、请求率及Completion率都能暴露瓶颈 |
+| P-07 | 端口/Fabric容量变化引起预期瓶颈变化 |
+| P-08 | 时延百分位附样本、窗口、模式和完成点，不预置P99倍数门槛 |
+| P-09 | 可选复制收益按实际字节与出口争用验收 |
+| P-10 | 可选INC收益与数值单独验收 |
+| P-11 | SRAM为容量估算，不输出无来源面积/功耗 |
+| P-12 | 未实现故障/恢复明确标记，不输出虚构RAS结果 |
+| P-13 | cut-through作为后续模式，不预承诺90ns |
+
+## 7. 硬件页校验与容量验收
+
+五个preset保留：64B Read、4KiB Read、4KiB/MRRS512、64B Write、8→1。
+自动测试采用`runBench()`实际diff与阈值；不可用preset替代同名bench。
+
+| ID | HTML校验用例 | `lab_reference`判据 |
+|---|---|---|
+| S-01 | 64B基线 | 在途500；实际吞吐>95%协议上限 |
+| S-02 | 4KiB、MRRS4KiB | 在途8、CplD 16个；吞吐>95%协议上限 |
+| S-03 | 4KiB、MRRS512 | 在途63、CplD 16个；吞吐>95%协议上限 |
+| S-04 | 64B、32 Tags | tagStall>0、吞吐<20%协议上限 |
+| S-05 | 64B、H Credit=1 | creditStall>0、吞吐<20%协议上限 |
+| S-06 | 64B、256-bit端口 | 首限制为端口数据面，吞吐<20%协议上限 |
+| S-07 | 8→1、egressCells=1 | queuePass=false，egress峰值超过配置；是参考容量失败检查 |
+| S-08 | timing对应实验 | 缩小资源产生实际反压；无静默溢出；停发后可排空 |
+
+参考判据依赖当前HTML默认值及其RTT/packing近似，不能写成所有合法
+PCIe6配置的规范值。固定当前源文件版本/hash，输入变化后重新计算。
+
+内部资源要求：A-01区分FLIT/Cell/sector；A-02端口和Fabric双重服务限制；
+A-03外链信用与内部额度独立；A-04显式容量/自动建议/峰值分开；A-05复制
+引用可选；A-06归约上下文可选；A-07拥塞原因、公平性与排空可观察。
+
+## 8. JSON、校准与页面其他工作区
+
+### 8.1 交换格式
+
+保留`pcie6-hardware-calibration-v1`的字段：`inputs`、`readRttNs`、
+`memRequests`、`protocolPayloadGBpsPerRequester`、
+`estimatedPayloadGBpsPerRequester`、`switchSpec`、`sim`、`notes`。
+`switchSpec`保留通道/位宽/Fabric/VC/VOQ/pool/egress/slots/tracking和
+逐link的raw/creditRTT/ackRTT/replay/forward/reverse H/D。
+
+导入器保留原始快照，逐字段映射；增加版本化metadata保存mode、来源hash、
+backend版本、seed、单位和测量合同。旧字段中的估算和浏览器仿真不能
+标成实测校准。`readRttNs=null`和`sim=null`是合法状态。
+
+硬件页目前只导出该JSON，不提供gem5结果导入；这是新增adapter交付项。
+顶栏workspace `{schema:1, config, versions, evidence}`是另一格式，
+不得声称其现有导入能接收hardware-calibration或gem5 ResultBundle。
+
+### 8.2 需求分析与辅助页面
+
+需求分析保留Train/Prefill/Decode/Diffusion，TP/EP/DP/PP/SP、rank放置、
+MoE热点、KV/权重流量、star/split/direct/mesh/ring/clos与原生互联模板。
+遵循页面`GPU=TP×DP×PP`、`DP%EP=0`、`TP%SP=0`合同；端口/lane预算、
+host staging和未知容量必须显式报告。graph模式连通不等于PCIe透明层次
+合法；native链路不自动拥有PCIe事务语义。
+
+平均Token/s需求和页面尾延估计先作为L0参考；只有加入完整依赖与compute
+profile后才报告闭环TTFT/TPOT/step时间。方案对比、验证记录、历史版本
+与实验hash绑定；网页已有数据不能被后端结果覆盖成不同配置的证据。
+
+## 9. 实现顺序与完成标准
+
+1. T-01：固定HTML/Base Spec版本，建立字段schema、规范条款与近似清单。
+2. T-02：实现参考sizing与JSON适配；字段/自动值/限制项对照页面。
+3. T-03：复现参考事件口径与S-01–S-07；证明差异可解释。
+4. T-04：实现gem5有限资源timing及S-08，检查字节/Tag/信用/引用守恒。
+5. T-05：按条款完善FLIT/shared FC/replay和ordering测试；只声明实测覆盖。
+6. T-06：对接需求分析流量、对比和结果导入，保留现有离线能力。
+7. T-07：需要时增加databook接口与配置/枚举细化；不倒置主次。
+8. T-08：物理Slice/bank/缓存等microarchitecture扫描，可校准但无预置PPA。
+9. T-09：多域、AI/CXL等扩展另立协议及验收合同。
+10. T-10：RTL/VIP/实测校准保存测点、输入和误差范围，不等同gem5行为验证。
+
+IP-01/02/03/04分别对应lane预算、PHY分组、逻辑端口和角色；IP-05域数；
+IP-06级联/系统规模；IP-07 Tag/跟踪；IP-08数据面接口；IP-09管理/统计；
+IP-10 PHY责任；IP-11 MPS/MRRS；IP-12诊断；IP-13故障；IP-14大radix。
+这些ID均为参数/扩展索引，不预置竞品型号、Host数、功耗或量产承诺。
+
+## 10. 证据与文档同步
+
+Base Spec条款决定协议，HTML内嵌`hardware-sizing.mjs`、`hardware-sim.mjs`、
+`hardware-page.mjs`决定参考功能和行为；`data/engine/topology`相关模块
+决定需求分析合同。DWC补充章节见§4.3，原图/RTL不复制到本项目。
+
+[Switch架构](PCIe6_Switch_Architecture.md)与
+[gem5仿真架构](PCIe6_Simulation_Architecture.md)须遵循本文的来源顺序、
+模式和验收范围。竞品驱动规格纳入§11及附录A作为补充需求，以独立profile进入扫描和评估；
+不覆盖规范、HTML输入合同或首版验收范围。
+本文件没有宣称已实现、已运行bench或已通过PCIe6合规。
+
+## 11. 竞品驱动的补充规格与目标
+
+本节保留此前竞品驱动的spec，作为产品候选目标和仿真探索输入，不删除
+其数值方向。来源分为COMP（原厂规格/官方记录）、BIZ（业务目标）、
+ARCH（架构自定门槛）、SIM（待仿真冻结）；不能把所有目标都称为竞品值。
+同一项可同时有多个来源，但必须分别记录其含义。
+
+以下新增COMP-ID避免改变§4/§6中F/P/IP的基础验收含义，相关ID仅为映射。
+引用W/C/R编号与历史核查记录见附录A/B。本次恢复既有资料，未重新联网
+核验供货状态、网页修订或产品性能，不将历史“已核实”表述延伸到当前。
+
+| 补充ID | 候选spec / 扫描目标 | 来源属性与边界 | 仿真实验 / 基础需求映射 |
+|---|---|---|---|
+| COMP-01 | 64/104/144 lanes，144-lane为重点；9×x16、36×x4或72×x2等价预算 | COMP/BIZ；逻辑port/controller/PHY分叉限制另核对，不因lane数自动支持72端口 | lane/端口预算与fanout扫描；F-04、IP-01至IP-04 |
+| COMP-02 | 144-lane版本4 Host、4 NTB；4虚拟分区为探索点 | COMP W12 / ARCH；Host、NTB、partition独立；作为多域产品目标保留，不是透明controller现成能力 | 独立NTB/地址转换/隔离profile；F-05、IP-05 |
+| COMP-03 | 产品MPS候选1KiB；x2/x4/x8/x16及x1配置候选 | COMP W12；不是PCIe或DWC上限，HTML仍接受128B–4KiB与x1–x16 | MPS/宽度敏感性；F-02/04、IP-11 |
+| COMP-04 | x16→x16 cut-through 90ns对标；本项目候选目标≤90ns | COMP W12 / TARGET；原厂测点、包型、PVT边界未完整给出，不能等同core latency | 后续C/T与PHY预算、同测点比较；P-13 |
+| COMP-05 | 单跳L_core<100ns；RTT_XPU<250ns挑战目标 | BIZ/ARCH；不是由90ns竞品值推出；必须分别冻结测点 | 短包Read/Write与RTT分解；P-02至P-04 |
+| COMP-06 | 大块payload吞吐≥95%独立协议模型上限 | ARCH TARGET；非95% raw、非被测实现自测峰值 | ≥4KiB、固定MPS/MRRS/packing、充足outstanding；P-05 |
+| COMP-07 | 64B payload达到该事务组合合法协议速率；合法置换无额外Fabric容量瓶颈 | BIZ/COMP趋势、ARCH；Ethernet 64B帧不能直接当PCIe 64B payload | IOPS/TLP rate、Read/Cpl双向与全端口置换；P-06/07 |
+| COMP-08 | 70%可持续均匀负载时P99 L_core≤2×空载基线 | ARCH/SIM；此前工程试验门槛，非竞品保证；热点另报 | 稳态矩阵、burst/incast、统计窗口与样本；P-08 |
+| COMP-09 | 广播源注入1份，扫描扇出2/4/8/16/32；动态组256/1K/4K | BIZ/ARCH/SIM；组数与扇出不是竞品披露；消耗真实复制资源 | 慢成员、引用、地址权限与出口争用；F-10/11、P-09 |
+| COMP-10 | INC组合ReduceScatter/AllGather；收益扫描1.2/1.5/2× | COMP W4的最高2×为厂商内部分析，其余为探索点；非端到端模型加速承诺 | 同拓扑合理算法基线、数值/同步/资源开销；F-12/13、P-10 |
+| COMP-11 | INT32、FP32、BF16→FP32候选；context64/256/1024、chunk256B–4KiB | ARCH/SIM；不是Astera数据格式或容量披露 | 吞吐/累加器/数值/超时与并发扫描；A-06 |
+| COMP-12 | DPC/eDPC、surprise-removal read tracking、FLIT计量/注错/trace | COMP W2/W12；具体代际/型号能力逐项核查，未实现不得显示已支持 | 故障域、在途请求回收及RAS扩展；F-18/19、P-12 |
+| COMP-13 | 带内/I2C/MCTP管理；I3C/OpenBMC、安全升级、管理与数据面隔离候选 | COMP W11/W12与ARCH；软件/硬件责任及版本另立合同 | 管理接口与复位/更新隔离；F-09/20/21、IP-09/12/13 |
+| COMP-14 | CXL3.1 Type-3 pooling候选、FM/CCI；PCIe KV appliance路径 | BIZ/COMP；PCIe6 Switch本身不证明CXL.mem/cache或pooling | 独立Host/Type-3/FM/OS矩阵；F-15/16、B-07 |
+| COMP-15 | 16/32/64 XPU系统探索，160/320-lane后续radix | BIZ/SIM、COMP W11；不是当前单芯片规模或标准透明Clos承诺 | 合法树、独立fabric/NTB模式及端口预算；IP-06/14 |
+| COMP-16 | Gen5 PEX89144/89104的115ns、49W/38W作代际背景 | COMP C1；典型功耗不是TDP；不能外推本项目Gen6 PPA | 明确型号/工艺/负载的后续PPA对照；P-11 |
+| COMP-17 | Tomahawk Ultra 250ns、51.2Tb/s、64B帧线速作邻近对标 | COMP W8；Ethernet语义，不作为PCIe RTT、payload或信用合同 | 小消息/交换服务/可靠性结构对比，结果分协议 |
+| COMP-18 | 众星微C82-4G：144 lanes、64GT/s、100ns级与CXL方向待核实 | A0历史业务输入；未取得一手手册/同口径测量，不列为已确认spec | 收集原厂来源与测点；仅显式假设扫描，不作硬约束 |
+
+### 11.1 测量合同与冻结门
+
+- `L_core`：入口协议适配器交付合法路由单元至出口适配器接受对应单元；
+  含core阶段/仲裁/排队，不含外部PHY和端点。
+- `L_pin`：RX输入指定首bit至对应TX首bit；含PHY/PCS/FEC/FLIT/CDC，
+  必须声明包型、gen/width、packing和负载。90ns对标先补齐其测点。
+- `RTT_XPU`：XPU提交请求至数据/状态可消费；与link loop或core往返分开。
+  两次switch穿越、链路、端点、序列化和queue预算互斥，不重复计时。
+- 每项附型号/stepping、固件、Host/端点、MPS/MRRS/RCB、class/VC、方向、
+  首/末bit、窗口、负载、重试/加密、样本/P50/P99/max及PVT适用范围。
+
+冻结记录必须包含：补充ID、来源及版本/页码、输入快照、模式、假设、
+测量合同、验收方法、结果/误差、责任人和冻结状态。先进入显式
+`competitor_target`实验profile，再经资源模型、RTL/VIP或实测证据评估；
+只有产品负责人明确采纳并满足冻结条件后，才升级为对应版本的验收规格。
+
+HTML默认配置与补充profile分别保存；加载竞品profile须显式选择，并显示
+相对默认输入的变化。不把90ns、250ns、4 Host/4 NTB、1KiB MPS等隐式
+覆盖到lab基线，也不通过固定输入延迟“证明”性能目标已达到。
+
+## 附录A：历史竞品资料记录（补充依据）
+
+本附录恢复此前文档内容，保留型号、原始链接和证据边界；其中“可信/可确认”
+均指历史核查记录，不表示本次已重新核实。§11决定如何转为本项目补充需求。
+
+
+### A.1 此前记录的竞品规格与性能指标
 
 | 厂商 / 产品 | 协议 / 单lane速率 | lane数 / 端口数 | 交换时延 | 典型功耗 | 其他明确规格 / 性能 | 原始来源 |
 |---|---|---|---|---|---|---|
@@ -413,7 +472,7 @@ SUE-T/ESUN是Ethernet Scale-Up的演进方向，LLR、CBFC与INC可出现在特�
 
 【证据分级】A1＝原厂产品规格；A2＝官方互操作记录；A3＝厂商分析；A0＝未取得一手证据。A1/A2不等于本项目独立实测，A3保留原分析条件。
 
-核对日期：2026-10-28。GB/s均为十进制；未确认字段保留“未确认”，不补估计值。国内竞品待核实项见A.4。
+历史文档记录的核对日期：2026-10-28；本次仅恢复原记录，未重新验证。GB/s均为十进制；未确认字段保留“未确认”，不补估计值。国内竞品待核实项见A.4。
 
 ### A.2 PCIe Switch容量、接口与产品特性
 
@@ -445,38 +504,11 @@ SUE-T/ESUN是Ethernet Scale-Up的演进方向，LLR、CBFC与INC可出现在特�
 
 同口径测量记录包含：型号/stepping、固件、Link速率/宽度、MPS/MRRS、P/NP/Cpl组合、FLIT packing、报文大小、Host/XPU、方向、负载、FEC/重试/加密状态、首末bit定义、P50/P99/max、温度与供电。未填写的字段视为不可直接比较【待测】。
 
-## 附录B：SimAI流量测量与规格提取工作项
 
-| ID | 工作项 | 交付物 | 对应需求 / 实验 |
-|---|---|---|---|
-| B-W01 | 固定模型、并行策略、数据精度、batch/sequence、rank映射及工具版本 | 可复现的workload、拓扑与配置基线 | B-01至B-07；S-01至S-08 |
-| B-W02 | 使用AICB统计训练/推理通信操作；有实机时采集操作耗时与计算通信重叠 | collective类型/次数、消息大小分布、通信组及时间线 | SC-04/05；S-02/03/04 [M1] |
-| B-W03 | 使用SimCCL将collective展开为逐流通信，核对算法、协议、channel/chunk与依赖 | src/dst通信矩阵、各rank发送量、跨节点流量与热点分布 | F-10/11/14；A-05/06 [M2][M3] |
-| B-W04 | 在网络backend测量链路利用率、流完成时间、排队及突发；缺失计数先补采集 | 每link字节/带宽、P50/P99、队列水位与stall分布 | P-05/06/08；A-04/07；S-06 [M4] |
-| B-W05 | 将逐流通信映射为PCIe事务，补充TLP/FLIT、P/NP/Cpl、Tag/credit、ordering及retry模型 | PCIe协议流量模型及与参考端点的校准记录 | F-01/02/06；IP-07；P-02至P-07 |
-| B-W06 | 比较不同lane数、端口宽度、上下行配比、跳数和buffer配置 | 性能/容量敏感性及满足业务约束的配置集合 | IP-01至IP-08；A-01至A-04；S-01/02/03 |
-| B-W07 | 对比单播、多播及INC，覆盖MoE不均匀流量、慢成员与并发上下文 | 源注入/出口流量、组表/上下文占用、collective净收益与正确性记录 | F-10至F-14；P-09/10；S-04/05 |
-| B-W08 | 使用真实集群、端口计数器及PCIe分析仪校准，统一计时与字节口径 | 模型/实测误差、适用范围及可冻结参数清单 | T-03/04；G1至G4 [M5] |
+## 附录B：竞品原始来源索引（历史记录）
 
-【计量边界】操作消息量、逐流payload、物理link字节及algbw/busbw分别统计；TX与RX分列，多hop和复制流量按实际路径累计。[M6]
+原编号保留以便追溯；本次不宣称链接内容和产品状态仍与历史记录相同。
 
-【能力边界】SimCCL导出不等于真实发流；SimAI-Physical的RoCEv2测量不等于PCIe6协议测量。<100ns core、<250ns RTT及协议合规须取得对应RTL、PHY和板级证据。[M3][M4]
-
-## 附录C：参考引用
-
-内部资料用于继承项目方向，不作为第三方竞品规格的独立证明。本文件中的新容量、队列、时延预算及实验档位均在正文标为ARCH/CALC/SIM。
-
-### C.1 内部与业务来源
-
-- [I1] sharpfabric/锐联半导体_商业计划书.md，v18.0，文件内数据截止2026-08-10；§3.3产品树、§3.5协议边界、§4.1规格、P3/P6/P9口径原则。[原文件](https://chatgpt.com/library?file_id=libfile_ecf8bfc4c7f081919ab00eb46741c187&account_id=personal)
-- [I2] sharpfabric/AI_Interconnect_Report_v1.0_review_revised.md；CXL/PCIe边界、Tomahawk Ultra时延口径、§6.6节点规模与业务边界；历史指标需另核验。[原文件](https://chatgpt.com/library?file_id=libfile_95956507fc64819187f7e085d7370327&account_id=personal)
-- [I3] sharpfabric/OrbfabriX-v0.34-roadmap-architecture-v2.pptx，第6–7页；E/O/M边界与E-series分阶段路线。[原文件](https://chatgpt.com/library?file_id=libfile_652ba2bac36081919a795277ded3e352&account_id=personal)
-- [I4] sharpfabric/SimAI_Intro_Online.pdf，2024-11-26，第5–9页；仿真工具分层与workload输入。[原文件](https://chatgpt.com/library?file_id=libfile_33ddfd868a848191a63e28d9963c2ec6&account_id=personal)
-- [I5] sharpfabric/UALink-Chiplet-Specification_v1.01_Final_evaluationcopy-1.pdf；作为Chiplet边界后续核查材料，不把Chiplet接口规范代替UALink网络协议规范。[原文件](https://chatgpt.com/library?file_id=libfile_df547090c0448191bfdda7883d1b58c9&account_id=personal)
-- [U1] 业务输入U1：144 lanes、64GT/s、PAM4/FLIT、CXL池化、INC/广播、RTT<250ns、内部交换<100ns?及竞品方向。问号指标保留为待验证目标。
-- [U2] 历史讨论检索：板内到柜内分层；区分switch latency与XPU RTT；SimAI/ASTRA-sim需补协议模型。历史助手数值不作为一手规格证据。
-
-### C.2 外部一手来源（核对日期2026-10-28）
 
 - [W1] PCI-SIG，PCI Express 6.0 Specification及FAQ：64GT/s、PAM4、256B FLIT、FEC/CRC、x16双向256GB/s、FLIT/non-FLIT及Tag说明。[规范概览](https://pcisig.com/pci-express-6.0-specification)；[FAQ](https://pcisig.com/faq?field_category_value%5B%5D=pci_express_6.0&keys=)。完整合规条款须以项目获得的正式规范与ECN为准。
 - [W2] Broadcom，PEX90104官方产品页：104 lanes/52 ports/4 NT ports与管理/RAS特性。[产品页](https://www.broadcom.com/products/pcie-switches-retimers/expressfabric/gen6/pex90104)
@@ -492,38 +524,11 @@ SUE-T/ESUN是Ethernet Scale-Up的演进方向，LLR、CBFC与INC可出现在特�
 - [W11] Astera Labs，Scorpio Smart Fabric Switch Family Brief，May 2026，5页。[官方PDF原页](https://www.asteralabs.com/wp-content/uploads/2026/05/FB_Scorpio_Smart_Fabric_Switches.pdf)。第2页应用/管理；第3页型号/封装；第4页八卡/KV；第5页运维诊断。型号规格以本简报更新，R01保留为历史版本。
 - [W12] Broadcom，PEX90000 Series Product Brief，PEX90000-PB105，2026-08-27，2页。[官方PDF原页](https://docs.broadcom.com/doc/PEX90000-PB)。第1页NTB/Host/Fabric；第2页配置、90ns cut-through、1KiB MPS及诊断。厂商系列规格不等于本IP实测或所有配置保证。
 
-### C.3 待补充的一手证据
 
-众星微C82-4G正式产品规格与测量报告；Broadcom Gen6 90ns的完整测量边界与各型号功耗资料；Astera对应配置的精确时延/端口组合/INC吞吐；客户XPU读回路径与端点实测；所选PCIe/CXL/UALink/SUE-T正式规范条款矩阵。上述缺口不以新闻报道或历史助手回答补成已确认spec。
+- [C1] Broadcom，[PCI Express Switches Selection Guide, BC00-0445EN](https://docs.broadcom.com/doc/BC00-0445EN)，第1页Gen5参数；原表可确认115ns等数值，测试边界未完整给出。
 
-### C.4 原报告尾部技术资料
+R01历史来源：
 
-【引用属性】原报告尾注编号保留用于追溯；产品说明只证明所述厂商能力，论文只支持研究方法和已限定实验，均不直接成为本IP数值承诺。优先链接原厂、作者或出版机构；二手市场估值、股价、未经核实专利统计和无关边缘AI资料不纳入需求依据。
-
-| 新编号 | 原尾注 | 文献与访问入口 | 纳入用途/约束 |
+| 编号 | 原尾注 | 文献与入口 | 边界 |
 |---|---|---|---|
 | R01 | 63 | Astera Labs, Scorpio Smart Fabric Switch Portfolio Brief, April 2025，[PDF](https://www.asteralabs.com/wp-content/uploads/2025/05/PB_Scorpio_Smart_Fabric_Switches.pdf)，第2页 | 混合I/O与P2P/RAS/telemetry；历史产品状态不代表2026当前状态 |
-| R02 | 77 | Rashidi等，FRED，ISCA 2025；[作者预印本2406.19580](https://arxiv.org/abs/2406.19580)，v2 2025-06-09 | 归约/分发与并行策略协同；wafer-scale实验不能直接套用到PCIe板级 |
-| R03 | 78 | Zhao等，Insights into DeepSeek-V3: Scaling Challenges and Reflections on Hardware for AI Architectures，ISCA 2025；[作者版本](https://arxiv.org/abs/2505.09343) | MoE、计算通信协同与多plane工作负载依据；不迁入GPU集群吞吐倍数 |
-| R04 | 79 | Jo Sanghoon、Hyojun Son、John Kim，Logical/Physical Topology-Aware Collective Communication in Deep Learning Training，HPCA 2023，56–68；[IEEE](https://ieeexplore.ieee.org/document/10071117/) | collective算法与物理拓扑匹配；元数据已核对，具体实验需查全文 |
-| R05 | 81 | Park等，An LPDDR-based CXL-PNM Platform for TCO-efficient Inference of Transformer-based Large Language Models，HPCA 2024；[作者机构记录](https://experts.illinois.edu/en/publications/an-lpddr-based-cxl-pnm-platform-for-tco-efficient-inference-of-tr/) | CXL容量/近存计算与推理场景区分；PNM性能不等于Switch性能 |
-| R06 | 82 | Liu等，Enabling Efficient Large Recommendation Model Training with near CXL Memory Processing，ISCA 2024，382–395；[DOI](https://doi.org/10.1109/ISCA59077.2024.00036) | 【原报告书目，全文待核验】近CXL处理的独立方向；原报告9.4×未迁入性能目标 |
-| R07 | 33 | 摩尔线程，[平湖架构官方页面](https://www.mthreads.com/architecture/pinghu) | 国产端点侧通信卸载与软件栈协同；私有互联不等于PCIe兼容 |
-| R08 | 37 | 壁仞科技，2026-08-03，[WAIC 2026 BLink2.0及超节点方案](https://www.birentech.com/news/odug5ugc29npl8m6slum8d9k/) | 内存语义、INC、拥塞控制与链路修复的系统能力拆分；系统规模不当作芯片radix |
-| R09 | 87 | imec，Interfacing silicon photonics for high-density co-packaged optics，原载Chip Scale Review Nov/Dec 2024；[原机构说明](https://www.imec-int.com/en/articles/interfacing-silicon-photonics-high-density-co-packaged-optics) | 后续光I/O封装接口约束；不作为本代PCIe交换时延指标 |
-| R10 | 9 | PCI-SIG规范概览及FAQ，见W1 | PCIe代际、FLIT/FEC与吞吐口径，替代第三方参数汇总 |
-| R11 | 7、15、16 | UALink Consortium、OCP、Broadcom官方资料，见W5/W7/W8 | 对应协议/交换芯片分别引用，避免SUE、Tomahawk Ultra、Tomahawk6混写 |
-
-### C.5 流量测量、协议比较与补充产品来源
-
-- [M1] Alibaba Cloud，[AICB官方仓库](https://github.com/aliyun/aicb)，README的Workload/Physical Run/Result Visualization；消息类型、规模与真实运行日志。
-- [M2] Alibaba Cloud，[SimCCL官方仓库](https://github.com/aliyun/SimCCL)，Quick Start与Supported Operations；standalone逐流导出。
-- [M3] Alibaba Cloud，[SimCCL Architecture](https://github.com/aliyun/SimCCL/blob/master/docs/design/architecture.md)，版本、算法/协议选择、FlowModel与NS-3接口。
-- [M4] Alibaba Cloud，[SimAI Tutorial](https://github.com/aliyun/SimAI/blob/master/docs/Tutorial.md)，Analytical / NS-3 / Physical；RoCEv2物理发流不等于PCIe协议测试。
-- [M5] Wang等，SimAI: Unifying Architecture Design and Performance Tuning for Large-Scale Large Language Model Training with Scalability and Precision，NSDI 2025，541–558；[论文入口](https://www.usenix.org/conference/nsdi25/presentation/wang-xizheng-simai)。论文对齐精度仅适用于其评测，未移植为本项目精度保证。
-- [M6] NVIDIA，[nccl-tests PERFORMANCE](https://github.com/NVIDIA/nccl-tests/blob/master/doc/PERFORMANCE.md)，algbw与busbw定义。
-- [E1] IEEE 802.1，[802.1Qbb Priority-based Flow Control](https://1.ieee802.org/dcb/802-1qbb/)，PAUSE与按优先级回压边界。
-- [E2] IEEE SA，[802.1AX-2020 Link Aggregation](https://standards.ieee.org/ieee/802.1AX/6768/)，多MAC links聚合；不等同PHY多lane。
-- [E3] AMD，[PG051 FCS](https://docs.amd.com/r/en-US/pg051-tri-mode-eth-mac/FCS)及[Receiver Interface](https://docs.amd.com/r/en-US/pg051-tri-mode-eth-mac/Receiver-Interface)，MAC坏帧指示示例。
-- [E4] PCI-SIG，[PCIe第六代演进与FLIT重试](https://pcisig.com/blog/evolution-pci-express-specification-its-sixth-generation-third-decade-and-still-going-strong)；旧代Data Link结构参见[Altera P-Tile Data Link Layer Overview](https://docs.altera.com/r/docs/683059/25.3/p-tile-avalon-streaming-ip-for-pci-express-user-guide/data-link-layer-overview?contentId=J5UuDi292_eViu_XAD~UDw)。旧代NAK/DLLP示例不替代Gen6 FLIT协议条款。
-- [C1] Broadcom，[PCI Express Switches Selection Guide, BC00-0445EN](https://docs.broadcom.com/doc/BC00-0445EN)，第1页Gen5参数；原表可确认115ns等数值，测试边界未完整给出。
