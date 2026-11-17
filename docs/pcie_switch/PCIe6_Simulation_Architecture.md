@@ -1,7 +1,7 @@
 # PCIe 6.0 Switch gem5 仿真架构
 
-版本：v1.3｜日期：2026-11-17｜状态：M0 host配置合同已实现；数据面待实现，无仿真结果。
-依据[需求v1.0](PCIe6_Switch_Requirements.md)，硬件资源见
+版本：v1.4｜日期：2026-11-17｜状态：M0 host配置合同已实现；数据面待实现，无仿真结果。
+依据[需求v1.1](PCIe6_Switch_Requirements.md)，硬件资源见
 [Switch架构](PCIe6_Switch_Architecture.md)，阶段与证据见
 [实施计划](PCIe6_Implementation_Plan.md)。
 
@@ -1025,3 +1025,39 @@ Requester/Completer不能直接调用SimAI或外部fun_arg。它们发typed comp
 debug snapshot应能重建`who owns what and why it waits`：每资源总量/
 used/reserved/free、每对象owner、每blocked依赖以及scheduled/pending
 事件。以此区分正常过载、永不ready环境、遗漏wake和真实资源等待环。
+
+## 15. 性能目标的执行与判定合同
+
+需求§6.4–6.6集中定义P-01–P-13的目标/测点/profile；硬件架构§12给出
+模块预算、资源修正及尚未闭合项。本层负责运行和判定，不能只把计数器
+输出当作目标满足。
+
+PerformanceCase包含target IDs、完整Experiment/Profile快照、traffic
+matrix、端点服务、clock/packing/ordering策略、warmup/window/drain、
+独立B_ref/R_ref、样本门槛和比较式。它与ScenarioSpec关联，但目标值与
+expected来源不能从被测DUT的实测峰值反推。M0 schema尚未支持该对象，
+M3实现时须新增版本化字段与测试，不偷偷将它塞入现有63字段。
+
+运行流水为：验证profile完整性→独立算协议/cut/端点上限→静态资源预算
+检查→运行DUT→数据/资源正确性检查→稳态/样本检查→目标数值比较。
+配置目标超理论上限可提前返回INFEASIBLE诊断；若用户选择探索仍可运行，
+但不得把吞吐接近瓶颈写成达到原输入target。
+
+| 目标组 | 必需采集与比较 | 不允许的判定 |
+|---|---|---|
+| P-02 core | front-end、write-ready、grant、bank/Fabric、egress、CDC/edge start/end；实际总量<100ns | 只计route查表，或用输入switchNs代替总量 |
+| P-04/13 RTT/pin | 源提交/可消费、pin首末bit、分段互斥预算；缺PHY测点标NOT_COMPARABLE | 用core往返、S/F或固定端点预算当pin/XPU实测 |
+| P-05/06/07吞吐 | completed有效payload、逐方向wire/Fabric/metadata服务、完整窗口与未完成；≥95% B_ref | 降低分母以排除core不足、重试字节当有效量、平均掩盖最差port |
+| P-08尾延 | 同profile空载L0、70%独立R_ref、无积压增长、required样本/cohort | 过载时发布稳态P99，或不同测点/包型的基线比较 |
+| P-09/10可选收益 | 同拓扑/数值/服务成本的合理baseline、总字节与同步 | 无INC实现仍填2×、忽略复制出口或端点服务 |
+
+预算检查必须使用实际Cell/beat/lane规则：连续byte服务与整数Cell/beat
+容量分开计算。对9口64B Write，硬件架构算例的1911.6 GB/s需求不能用
+1407.6或1536 GB/s配置判为通过；可测试2880-bit等整Cell候选或已明确
+实现的紧凑packing策略，旧HTML sizing输出仍保留作reference对照。
+
+M3报告把`correctness_status`、`target_status`与`evidence_level`分开：
+目标可以FAIL或尚不可比，但不能掩盖数据/协议错误；通过模型目标仍不是
+硅签核。只有M3周期门通过的profile才进入M4 SimAI，同profile在adapter
+前后检查；模型step/TPOT收益由闭环运行得出，不以switch降低若干ns直接
+乘成模型加速比。

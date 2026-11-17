@@ -1,7 +1,7 @@
 # PCIe 6.0 Switch 架构设计
 
-版本：v1.1｜日期：2026-11-17｜状态：待实现的架构，不含性能验证结论。
-依据[需求v1.0](PCIe6_Switch_Requirements.md)；软件执行合同见
+版本：v1.2｜日期：2026-11-17｜状态：待实现的架构，不含性能验证结论。
+依据[需求v1.1](PCIe6_Switch_Requirements.md)；软件执行合同见
 [仿真架构](PCIe6_Simulation_Architecture.md)，交付顺序见
 [实施计划](PCIe6_Implementation_Plan.md)。
 
@@ -435,3 +435,146 @@ M2退出要求端点、RX/Core/VOQ/Scheduler/Fabric/Egress/Link在容量和
 回调合同下组合正确；M3增加周期bank/FLIT/FC/replay及选定错误覆盖。
 V-03–V-18/21–V-25/35分别绑定上述模块，具体映射见实施计划的设计索引。
 模块测试先于实现，TDD不替代本节的结构、算法和通信设计。
+
+## 12. 性能目标如何由架构满足：预算、机制与失败条件
+
+需求§6.4–6.6是数值目标/测点/测试profile，§11 COMP保留其来源。
+本节给出设计预算和配置修正，不宣称尚未实现的M2/M3已经达标。
+“能报告指标”与“满足指标”是两项工作；目前只有M0配置验收完成。
+
+### 12.1 目标到模块与验收的闭合矩阵
+
+| 需求目标 | 设计机制与资源条件 | 需要的证据 / 当前状态 |
+|---|---|---|
+| P-01 raw与payload分列 | 每方向Link独立串行化，协议policy扣真实header/FLIT/packing；物理cut明确 | 独立B_ref与wire counters；线速算术可核对，周期执行未验收 |
+| P-02 L_core<100ns | 分阶段有限pipeline、本地路径、联合grant、无竞争服务上界；见12.2 | SW-LAT每stage start/end与总量；70ns分配只是预算，不是结果 |
+| P-03/13 pin/C-T≤90ns | 显式RX/TX/PHY/FEC/CDC、flush策略；安全C/T单独提交/abort | CT-PIN及外部边界证据；当前未实现/未闭合，S/F不替代 |
+| P-04 RTT<250ns | DMA/Tag等待、请求/数据双向路径、端点服务分别预算 | RTT-64完整路径；默认端点/延迟组合不能满足，需独立修正 |
+| P-05 ≥95%大包协议上限 | 独立请求/Cpl服务、窗口足够、bank/Fabric/staging无额外瓶颈 | SW-BULK、窗口扫描、协议/资源守恒；M3评估 |
+| P-06/07 64B与置换≥95%上限 | 每port解析≥2 TLP/cycle探索点、按Cell膨胀扩宽Fabric、实际bank/metadata服务；见12.3 | SW-SMALL/SW-PERM实际吞吐与stall；旧Fabric起点不足，采用新候选或优化packing |
+| P-08 70%负载P99≤2×空载 | VOQ目的隔离、合法ordering、RR公平、保留池和有限背压；见12.5 | SW-TAIL固定分母/样本、无积压增长；不能仅由缓存总容量证明 |
+| P-09/10 复制/INC | 分支引用、真实复制带宽与有限归约context/算力 | M5资源/数值及M4闭环净收益；无实现不输出加速 |
+| P-11/12 PPA/RAS | 有限资源估计、故障隔离和恢复模型 | 数值SLA未给、外部工具/测试未完成，明确OPEN |
+
+### 12.2 空载core阶段预算：1GHz候选
+
+以下是SW-LAT的**架构分配上限**，适用MemRd header-only、64/256B
+MemWr/CplD，S/F已收到完整合法TLP后进入core；同/跨Slice分别建实例。
+假设core 1GHz，真实周期来自实现的pipe/beat/RAM/仲裁，不能把预算值
+直接填成固定延迟后自证达标。
+
+| 阶段 | 分配cycles/ns | 预算约束与实现选择 |
+|---|---:|---|
+| classify/route | 8 | 有限header槽和查表pipeline，解析率另验收 |
+| ordering/admission | 6 | 依赖查询与原子资源bundle，不全局扫描历史 |
+| RX→core payload/metadata写入 | 8 | 明确bank beat/写端口；256B数据含实际写服务 |
+| 等待首grant/联合仲裁 | 8 | 空载也含边沿/轮转，不能删除仲裁时间 |
+| bank读+local/cross Fabric | 16 | 保留不同资源时长，pipeline并发不重复加完整传输 |
+| egress重组/交付adapter | 8 | 有限staging与最后Cell DATA_READY事件 |
+| 必需CDC/接口跨域 | 12 | 按实际边界记录，不与上一项重复计 |
+| 其余边沿/对齐 | 4 | 正服务与clock rounding显式 |
+| 合计 | 70 | 对<100ns留约30ns工程余量；实际总量仍须严格小于100ns |
+
+core统计起点必须覆盖这些core内阶段，不能把store写入或仲裁移到测点外
+来缩短结果。输入FLIT收齐/PHY/FEC、wire传播与端点内存不在L_core内，
+它们仍进入L_pin/RTT。大于256B/不同频率/受载数据另测，不把此表外推为
+全包型/全PVT保证。若实际cross-Slice/CDC超过分配，报告目标失败并修改
+结构/时钟/profile，不能把超出的延迟抹入不可见常数。
+
+S/F对大TLP的接收/完整缓存时间属于pin路径限制，C/T才可能减少相应等待。
+64B低负载时FLIT等待填充/flush也可能主导：低延迟flush与满packing吞吐
+有取舍，SW-LAT和SW-SMALL须记录各自策略及同配置交叉结果，不虚构同时
+拥有零等待与100% packing的通用profile。
+
+### 12.3 小包/全端口吞吐：先补足Cell服务预算
+
+用HTML当前假设做可复核算例，而非严格FLIT或硅规格：Gen6 x16、236/256、
+packing100%、64B MemWr+16B header、64B Cell+8B metadata。
+
+```text
+TLP区域服务      = 128 × 236/256 = 118 GB/s / port
+事务率           = 118 / 80 = 1.475 G TLP/s / port
+应用payload      = 1.475 × 64 = 94.4 GB/s / port
+Fabric字节/TLP   = ceil(80/64) × (64+8) = 144 B
+Fabric服务/port  = 1.475 × 144 = 212.4 GB/s
+9-port置换需求   = 9 × 212.4 = 1911.6 GB/s
+95%目标下限      = 1816.02 GB/s
+按100%协议服务加20%设计余量 = 2293.92 GB/s
+```
+
+原3×512=1536 GB/s探索点不满足此小包需求；HTML默认自动9×1472-bit在
+1GHz/85%折减下为1407.6 GB/s，同样不足以证明全端口置换。该公式的自动
+结果保留参考模式，但不能直接用来宣称P-07达标。
+
+| 资源 | 可满足此算例的候选预算 | 仍需验证 |
+|---|---|---|
+| port内部每方向byte服务 | 至少212.4 GB/s；连续2016-bit/85%=214.2；整Cell至少4×72B lane，加20%设计余量取5 lane | 与wire服务pipeline、header/数据混合；整Cell不能偷用连续预算 |
+| 每port header/descriptor路径 | ≥1.475 G TLP/s；每cycle 2槽在85%折减下1.7 G/s | 分配/route/入队/出队各阶段，不能只扩payload总线 |
+| 全芯片首TLP grant/metadata | ≥13.275 G TLP/s；至少16槽/cycle在85%下13.6 G/s | 多出口冲突、eligible与索引服务 |
+| 连续byte-budget Fabric | 9×2400-bit@1GHz/85%=2295 GB/s | 这是连续服务近似，不自动证明整数Cell lane容量 |
+| 整Cell lane候选 | 每并行通道5×72B/cycle，即2880-bit物理等价，9通道/85%=2754 GB/s | 真实lane/metadata布局、面积、bank供数；不是冻结RTL总线 |
+| 3个物理Slice的需求 | 每Slice约637.2 GB/s，含20%余量764.64 GB/s | 入口映射均衡、跨区cut与热点，不仅总和 |
+| 每Slice payload SRAM读/写 | 3port各94.4，读写各约283.2 GB/s | 16×64B 1R1W理论1024 GB/s每方向不保证无bank冲突 |
+
+2400-bit可满足连续byte预算，但只容纳4个完整72B Cell时会损失余量；
+因此周期模型必须选定stream packing或显式Cell lane组织，不能拿连续
+带宽公式替代拍级执行。上述整Cell候选为一种可测试的满足资源上界方案，
+也可用更紧凑Cell/header sideband降低膨胀；后一方案必须计header服务与
+metadata、独立验收后才改变strict模型，HTML reference公式保持不变。
+
+全端口置换需要实际唯一port集合，port可同时发起和响应；不能把这些
+物理端口简单计为reqPorts+cplPorts的两组互斥端口。M0的简化预算检查
+不能代表该profile，M2/M3须扩展显式binding/IR来验证真实lane/端口图。
+
+Read模式还要把同方向的MemRd/Cpl混合加起来，不能用此Write置换配置
+自动证明全双向Read线速。每种class组合独立计算B_ref和资源服务向量。
+
+### 12.4 Tag、credit、replay与缓存闭环预算
+
+每个窗口按它实际保护的路径计算，端到端Read RTT不是每跳credit/ACK RTT。
+以64B Read单对端参考上限99.37 GB/s、事务RTT250ns为算例：
+100%上限至少389个在途MemRd，95%上限至少369个；这是协议忽略额外
+排队的窗口下界。若实际RTT更长、同Function分担不同flow或Cpl预算不足，
+Tag需求增加，不能因配置768个Tag就自动证明Read吞吐达标。
+
+H/D按规范profile的header单位/data16B和Shared group规则计算，并检查
+接收backing；header-only MemRd可能先受H窗口或解析率限制。body容量与
+header槽独立扫描，返回Cpl空间在请求发起时有真实预算。
+
+raw128 GB/s、ACK RTT185ns、20%余量时，按参考256B单位约需111个
+FLIT等价保护槽，自动取128；32KiB只是Replay参考容量，不含其他RX/
+core/staging，也不证明实际重传规则或replay metadata充分。
+
+突发缓存需对给定流量矩阵积分`max(arrival-service,0)`，计正在接收/预留/
+core写入/active transfer/replay保护；均匀平均BDP不能覆盖8→1热点。
+缓存不够必须出现有限反压及可解释吞吐，不能扩大窗口后隐藏stall。
+
+### 12.5 ordering、VOQ与尾延目标的关键约束
+
+§11.4的M2保守ordering域可能造成跨出口HOL，不能凭它宣称P-07已满足。
+M3 performance profile必须提供所选合法依赖scope/越过策略的V-10 trace；
+SW-PERM和SW-TAIL同时测ordering stall。若保守策略使吞吐<95% B_ref或
+P99超界，目标应FAIL/未闭合，不将该损失从独立分母剔除后判PASS。
+
+VOQ隔离出口只能减少可避免HOL，无法取消规范必须保持的依赖。RR、class
+保留、bank映射和slot深度保证必要服务机会，但P99要由固定负载实验验证。
+每个资源输出stall持续时间、等待age与峰值；只有稳态无积压增长且样本
+达到需求门槛，才对70% R_ref场景判断2×空载目标。incast/永久阻塞另报，
+不是这一P99目标的适用前提。
+
+### 12.6 pin/RTT的未闭合预算必须显式保留
+
+P-13的90ns是独立C/T目标；要证明它，必须有明确RX/TX/PHY/FEC/packing/
+CDC模型或对应测量。70ns core预算不等于90ns pin可达，S/F收到整TLP
+前的时间也不能从pin测量中删掉。当前缺这部分执行与校准证据。
+
+P-04条件为：
+`L_switch_req + L_switch_cpl + L_links_roundtrip + L_endpoint +
+L_serialization/alignment + L_queue < 250ns`，各项互斥。
+若两次pin各90ns、传播10ns，端点及所有余项必须<60ns；使用页面120ns
+endpoint已经不可能满足。需要更快端点/响应器、链路/协议路径或调整
+目标，不是单独把core从100降为90就闭合。
+
+因此本设计对P-02提供候选core预算，对P-05–07提供可计算服务预算和
+改进配置，对P-08提供隔离/调度与验证策略；P-04/P-13仍明确OPEN，
+P-11/12仍缺目标输入。M3报告每项是否达到，不把“有模块设计”当达标证据。

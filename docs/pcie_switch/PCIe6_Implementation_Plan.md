@@ -1,7 +1,7 @@
 # PCIe 6.0 Switch 仿真实施计划
 
 版本：v1.0｜日期：2026-11-17｜状态：M0配置合同已实现并通过本地验收；M1–M5未实现/未验收。
-依据[需求v1.0](PCIe6_Switch_Requirements.md)、
+依据[需求v1.1](PCIe6_Switch_Requirements.md)、
 [硬件架构](PCIe6_Switch_Architecture.md)与
 [仿真架构](PCIe6_Simulation_Architecture.md)。本文件是阶段依赖、任务与
 完成证据的唯一计划；不承诺未经估算的日历工期或已运行结果。
@@ -270,3 +270,24 @@ required子case，Train/Prefill/Decode/Diffusion分别有DAG fixture，
 详细设计是拟实现合同，M0配置验收没有实现上述模块。每项任务先按此
 合同写fixture/checker，协议policy或优化ordering域改变时补相应反例，
 再写代码；不借TDD重新定义或删除已有实现任务。
+
+## 14. 性能目标闭合工作（沿用原任务）
+
+需求§6.4–6.6给出P目标/profile，硬件§12给出预算，仿真§15定义判定；
+[性能审查记录](validation/performance_review.md)保存已发现缺口和解析算例。
+此补充不改变M0完成状态，也不宣称M3或产品指标已达到。
+
+- M1-01/02须区分输入target与独立协议上限；保留原HTML公式，报告默认
+  128 GB/s在64B Read/Write等组合不可达，不将自动宽度当达标证据。
+- M2-03/04按真实Cell/beat/metadata/port映射建有限服务；除了Fabric字节
+  总带宽，还验证parser、descriptor、grant率、bank与staging瓶颈。
+- M3-05/06先构造SW-LAT/RTT-64/SW-BULK/SW-SMALL/SW-PERM/SW-TAIL/
+  CT-PIN实例和独立expected budgets，再跑V-23/24/35及V-10/14/15。
+  旧1472×9或3×512配置在64B算例应暴露core瓶颈；新候选不得只凭总和判PASS。
+- V-24增加每P-ID的PASS/FAIL/UNSUPPORTED/NOT_COMPARABLE/NOT_RUN子case；
+  性能不达、测点缺失、样本不足与正确性失败分别诊断。V-23/35校验stage
+  时间分解和窗口，而非固定switchNs；V-10包含保守ordering的HOL反例。
+- P-04/P-13预算或PHY/endpoint证据不全保持OPEN；P-11/12待业务输入，
+  不阻塞已有schema/模块开发，但阻止对应产品性能承诺冻结。
+- M4只使用已验收cycle profile接入SimAI；比较模型step/TPOT/collective
+  需相同compute/workload/拓扑/算法，不能把COMP宣传数值当预期结果。

@@ -110,3 +110,18 @@ SIM-08/09/12，V-32覆盖SIM-11/12/13/14，V-33覆盖SIM-06/07/15，
 V-34覆盖SIM-03/16，V-35覆盖SIM-01。结果/版本还结合V-20/26。
 V-32分Train、Prefill、Decode、Diffusion和MoE子fixture，分别覆盖
 无争用/受控争用、完成依赖和输入compute profile；缺失子case不计覆盖。
+
+## 7. 性能目标的required子case
+
+需求§6.4–6.6/硬件架构§12定义P-01–P-13。M3之前为V-23/24/35固定
+完整PerformanceCase：独立协议/端点B_ref/R_ref、traffic/ordering/packing/
+clock、start/end测点、warmup/window/drain、样本门槛及目标比较式。
+
+V-23/35分别测试70-cycle候选stage预算的实际事件分解、连续byte与整数
+Cell-lane容量差异、Tag/FC/replay窗口限制。V-24逐P-ID验证达标、未达标、
+缺能力、测点不可比、未运行及样本不足，不以DUT峰值反推分母。
+64B/9口旧Fabric配置应暴露瓶颈，不因只有纸面raw speedup就通过；
+V-10加入保守ordering造成跨出口HOL而影响SW-PERM目标的反例。
+
+数值目标不改变数据正确性：任何协议/身份/字节错误先FAIL；性能判据
+另报。P-04/P-13缺PHY/endpoint证据不可PASS，P-11/12缺目标输入明确待定。

@@ -1,6 +1,6 @@
 # PCIe 6.0 Switch 仿真需求定义
 
-版本：v1.0（补充SimAI集成需求）｜日期：2026-11-17｜状态：需求与验收计划，尚无实现结果。
+版本：v1.1（补齐性能目标与架构闭合口径）｜日期：2026-11-17｜状态：需求与验收计划，尚无实现结果。
 
 ## 1. 目标、来源与优先级
 
@@ -298,23 +298,72 @@ HTML当前样本是**单个分段MemRd/MemWr**从首链路launch到最后CplD或
 尾延不同，报告差异原因。两种模式分别显示“参考检查通过”和“有限资源
 模型通过”，不能用前者证明后者。
 
-### 6.4 性能ID与参数化原则
+### 6.4 性能目标矩阵：数值、适用profile与验收
 
-| ID | 当前验收定义 |
-|---|---|
-| P-01 | raw/协议payload/实际payload分别计量，每方向分列 |
-| P-02 | 实际Switch core阶段与排队可分解，默认switchNs不是实测目标 |
-| P-03 | link/Retimer/序列化/packing延迟有明确边界 |
-| P-04 | 输入RTT与实际Read完成时间分别输出；不预承诺250ns |
-| P-05 | 参考bench按HTML阈值核对吞吐，详细模式用独立预算和守恒 |
-| P-06 | 64B与4KiB、请求率及Completion率都能暴露瓶颈 |
-| P-07 | 端口/Fabric容量变化引起预期瓶颈变化 |
-| P-08 | 时延百分位附样本、窗口、模式和完成点，不预置P99倍数门槛 |
-| P-09 | 可选复制收益按实际字节与出口争用验收 |
-| P-10 | 可选INC收益与数值单独验收 |
-| P-11 | SRAM为容量估算，不输出无来源面积/功耗 |
-| P-12 | 未实现故障/恢复明确标记，不输出虚构RAS结果 |
-| P-13 | cut-through作为后续模式，不预承诺90ns |
+性能需求同时包括“必须正确计算/测量”的基础交付和“架构应努力达到”的
+数值目标。此前P-ID只描述输出、数值隐藏在COMP表，无法直接指导实现；
+本表将二者统一。数值保留TARGET属性，不冒充规范要求或已验证结果；
+COMP来源/条件不变。P-ID仍为P-01–P-13，不另换一套编号。
+
+| ID | 性能目标/门槛 | 适用条件、测量与来源 | 架构/验收关联 |
+|---|---|---|---|
+| P-01 | Gen6 x16 raw单向128 GB/s；144-lane全部port TX raw合计1152 GB/s | 规范线速预算，不是payload或单个cut；详细模型扣实际协议开销 | 各方向Link服务与独立B_ref；V-23/35 |
+| P-02 | 单跳空载L_core <100ns【TARGET】 | SW-LAT profile，普通MemRd、64/256B MemWr/CplD；入口合法单元至出口适配器接受，含排队/服务、不含PHY；COMP-05业务/架构目标 | core逐阶段预算；同/跨Slice分别测；V-23/35 |
+| P-03 | 分项得到实际L_pin；90/100/125/150ns仅为探索档位 | ARCH扫描；含所选PHY/FEC/FLIT/CDC的模型或测量合同；无PHY证据不得输出pin实测承诺 | L_core之外的边界预算与未标定项明确，不能与P-02相加重复计费 |
+| P-04 | RTT_XPU <250ns【挑战TARGET】 | RTT-64 profile、单hop/x16/64B Read、无retimer/错误/竞争；实际endpoint服务和测点固定；COMP-05 | 请求+返回+端点+wire预算闭合才可PASS；V-23/30/35 |
+| P-05 | ≥4KiB大块payload达到独立合法协议/端点上限B_ref的≥95%【TARGET】 | SW-BULK；MPS/MRRS/RCB/packing与outstanding固定、无出口争用/重试；COMP-06，非95% raw | Link/Tag/Cpl/FC/replay与内部服务全部预算；V-23/24/35 |
+| P-06 | 64B普通Write/Read各达到其独立B_ref的≥95%作为有限窗口工程门槛【TARGET】；理论追求合法线速 | SW-SMALL；分别报告IOPS/TLP/s/GB/s、请求/Completion两方向；95%为本项目ARCH验收容差，不是厂商保证；COMP-07 | 解析/descriptor/grant/cell处理率与字节率同时满足；V-23/24/35 |
+| P-07 | 满端口合法置换无额外core瓶颈；整芯片payload≥95%对应B_ref总和【TARGET】 | SW-PERM；真实port映射、合法路由、无incast；COMP-07，不能用“Fabric纸面容量足够”代替实际吞吐 | VOQ/order/bank/Fabric/staging联合验证，含跨Slice置换；V-14/15/24/35 |
+| P-08 | 70%独立可持续参考负载下P99 L_core≤2×同profile空载基线【TARGET】 | SW-TAIL，均匀非过订阅；COMP-08工程目标；热点/突发另报不外推 | 固定R_ref/分布/窗口/样本，报告排队分项和删失；V-12/23/24 |
+| P-09 | 广播源只注入1份payload，扇出扫描2/4/8/16/32【可选TARGET】 | COMP-09；出口总量和慢成员占用计入，不承诺免费N倍BW | 多分支descriptor/refcount及实际复制服务；M5专门场景 |
+| P-10 | 选定collective有净收益>1，扫描1.2/1.5/2×【可选TARGET】 | COMP-10/11；同拓扑合理软件算法/数值合同及同步成本，非全模型2×保证 | INC/端点/CCL服务与数据正确性先通过，M4/M5分层评估 |
+| P-11 | 面积/功耗/温度目标待产品输入，当前无可冻结数值 | 不用Gen5典型功耗外推本项目Gen6；COMP-16为背景 | 只输出资源估计及独立PPA证据；当前指标未闭合 |
+| P-12 | RAS恢复SLA/失败率待客户输入，当前无可冻结数值 | COMP-12/13功能方向不自动给出恢复时间指标 | 注错/隔离/恢复分别测；当前数值指标未闭合 |
+| P-13 | x16→x16 cut-through ≤90ns【TARGET】 | CT-PIN，COMP-04对标；必须对齐包型/首末bit/PHY边界；S/F结果不冒充C/T | 安全C/T、RX/TX/PHY预算及实测/VIP证据，单独验收 |
+
+所有目标报告`PASS/FAIL/UNSUPPORTED/NOT_COMPARABLE/NOT_RUN`及原因。
+配置合法、RTL接口存在或输出了P99，均不表示数值目标达成。当前M0只
+做配置合同，P-02/P-04–P-10/P-13尚无运行证据；P-11/12仍缺业务数值。
+
+### 6.5 性能验收profile与独立分母
+
+| Profile | 必须固定的实验输入 | 主要检查 |
+|---|---|---|
+| SW-LAT | 1GHz core探索点、单颗x16路径、64/256B包组合、同/跨Slice、无竞争/重试、时钟与CDC | P-02；baseline含实际stage和等待，不用固定switchNs证明目标 |
+| RTT-64 | 一个64B Read、端点角色/内存服务、MRRS/MPS/RCB、链长、单hop、无retimer、单outstanding、无竞争 | P-04；起止为源提交至数据可消费，单独报告端口loop/core/endpoint |
+| SW-BULK | 4KiB及更大应用、MPS至少256B档位、MRRS512/4096、合法RCB、充足窗口、Read/Write分列 | P-05；协议/端点独立B_ref，不以被测实现峰值作分母 |
+| SW-SMALL | 64B Read/Write、合法header/packing、解析/完成率、Tag/FC/replay窗口 | P-06；每方向class混合与单源/多源分列 |
+| SW-PERM | 9×x16候选、全部port实际映射、同/跨Slice的合法一对一置换、宽度/频率/Cell/metadata/ordering策略 | P-07；无目的竞争，所有参与端点服务能力明确 |
+| SW-TAIL | 固定合法均匀矩阵、70% R_ref、与空载相同包型/路由/策略、相同时间戳 | P-08；先证明无积压增长再判断P99 |
+| CT-PIN | C/T已实现，pin测点、合法转发阈值、PHY/FEC/packing/CDC及包型固定 | P-13；缺测点/PHY不能PASS |
+
+R_ref/B_ref从合法协议开销、物理cut和固定端点能力独立推导，不包含
+被测core达到的峰值；若core提前饱和，必须判目标失败/未闭合，而不是
+降低分母后自证达标。profile必须保存完整实例；以上表格是必填约束，
+未填端点/PHY/路由参数不作为已冻结、可直接运行的实例。
+
+95%门槛用于有限观测窗口的工程验收，不等于允许协议丢5%数据：已接收
+事务数据/身份/顺序必须100%正确，未完成/失败另报。P99工程采样门槛
+至少10000个同口径完成样本，P999至少100000；低于门槛只报告样本分位
+及不足标记，不宣传可靠尾延保证。此门槛是ARCH测试策略，不是统计置信
+证明；warmup/measurement/drain与arrival cohort在运行前固定。
+
+### 6.6 可行性门：输入目标不等于可达payload
+
+HTML默认`target=128 GB/s`是用户需求输入。按其当前64GT/s x16、填充率
+100%、236/256、请求16B/Completion12B假设，TLP区服务为118 GB/s：
+64B Write参考上限94.4 GB/s；64B Read单对端返回受限上限约99.37 GB/s；
+4KiB Read、MPS256B参考上限约112.72 GB/s。该默认输入已超这些上限，
+正确输出是“目标受限”，不是让架构声称实现128 GB/s应用payload。
+
+以上仅复核页面公式，不是严格FLIT模型/芯片实测。Read并发双向混合时
+还要扣同一方向的请求/Cpl共享资源，不能把单对端99.37外推到所有port
+同时双向发Read。严格B_ref使用实际header/OHC/packing/空闲等规则重算。
+
+RTT也要先算残余：页面默认2×60ns switch预算+120ns endpoint+10ns
+往返传播已经是250ns，未留额外序列化/对齐/排队空间。即使两次switch
+各90ns，配合同样120ns端点和10ns传播已达310ns。P-04不能由P-02或
+P-13推出；端点与其他项不降到剩余预算内，就明确标为不满足挑战目标。
 
 ## 7. 硬件页校验与容量验收
 
