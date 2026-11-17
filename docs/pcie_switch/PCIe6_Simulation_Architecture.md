@@ -1,6 +1,6 @@
 # PCIe 6.0 Switch gem5 仿真架构
 
-版本：v1.1｜日期：2026-11-17｜状态：M0 host配置合同已实现；数据面待实现，无仿真结果。
+版本：v1.2｜日期：2026-11-17｜状态：M0 host配置合同已实现；数据面待实现，无仿真结果。
 依据[需求v1.0](PCIe6_Switch_Requirements.md)，硬件资源见
 [Switch架构](PCIe6_Switch_Architecture.md)，阶段与证据见
 [实施计划](PCIe6_Implementation_Plan.md)。
@@ -30,22 +30,160 @@ Base Spec 6.0定义协议，HTML定义功能和参考行为；databook是实现�
 现有HTML JS仅用于oracle，不与gem5共同推进同一实验。内部同Tick事件
 按稳定sequence/资源顺序调度，与JS参考排序的差异需要回归确认。
 
-## 2. 从输入到结果
+## 2. 从输入到结果：SimAI与gem5的明确边界
+
+**分界点是Flow级通信请求与完成事件。** SimAI决定执行什么计算/通信、
+何时可以发起；gem5决定该通信经过有限PCIe硬件资源后何时完成。
+SimAI不生成TLP/FLIT或管理硬件信用，gem5不自行选择模型并行策略或
+推进模型DAG。两者之间由`PcieNetwork + PcieRuntime facade`连接。
+
+本章描述M4的目标集成结构，当前只有M0配置合同已实现。SimAI执行在
+M3周期模型验收后接入；M0–M3仍可用synthetic输入独立运行gem5。
+
+### 2.1 层次划分和总体数据流
 
 ```mermaid
 flowchart TB
-  UI[HTML配置 / CLI / workload] --> RAW[RawInput与来源快照]
-  RAW --> N[Schema / 单位 / Profile解析]
-  N --> S[SizingResult / 显式资源与自动建议]
-  N --> CAP[能力 / 拓扑 / 协议校验]
-  S --> CAP
-  CAP --> REF[lab_reference]
-  CAP --> TIM[pcie6_timing]
-  TIM --> SYS[端点 / Link / Switch共享事件队列]
-  REF --> RES[ResultBundle / 指标 / Trace / 诊断]
-  SYS --> RES
-  RES --> AD[Calibration / HTML结果适配]
+  INPUT[HTML / CLI / 版本化ExperimentSpec] --> CONFIG[校验 / Profile / Placement编译]
+  CONFIG --> WI[WorkloadSpec / Compute Profile / Communicators]
+  CONFIG --> HI[Topology / Protocol / Hardware Profile]
+  subgraph AI[SimAI层：工作负载与通信依赖]
+    WI --> DAG[模型DAG / Compute事件 / Rank调度]
+    DAG --> CCL[SimCCL / 显式Collective算法]
+    CCL --> FLOW[就绪Flow：src / dst / bytes / dependencies]
+    DONE[通信完成回调] --> DAG
+    DAG --> WM[Step / Collective / TTFT / TPOT指标]
+  end
+  subgraph BOUNDARY[通信边界：同进程C++ Adapter]
+    FLOW --> API[AstraNetworkAPI / PcieNetwork]
+    API --> BRIDGE[消息匹配 / FlowIR / Bounded Admission]
+    RETURN[FlowCompletion / onWritable / Error] --> API
+  end
+  subgraph HW[gem5层：PCIe周期硬件模型与唯一事件队列]
+    HI --> RT[PcieRuntime facade]
+    BRIDGE -->|submitFlow / schedule| RT
+    RT --> DMA[Endpoint DMA / Requester / Completer]
+    DMA --> PCI[TLP / Link / Switch / FC / Replay]
+    PCI --> COMP[源可复用 / 目的可见 / 请求完成]
+    COMP -->|异步事件| RETURN
+    PCI --> HM[Link利用率 / Queue / Stall / Cycle Trace]
+    EQ[gem5 EventQueue：硬件和SimAI控制事件]
+    RT --> EQ
+  end
+  API --> DONE
+  SYN[Synthetic微基准] --> RT
+  WM --> RESULT[ResultBundle / 版本与配置hash]
+  HM --> RESULT
+  RESULT --> OUT[HTML结果导入 / CLI报告 / 校准档案]
 ```
+
+`FlowIR`是逻辑通信描述，`Transaction/TLP`是gem5内部硬件事务；一个
+collective产生多个flow，一个flow再拆为多个请求/TLP/Completion。
+箭头上的数据和完成不能一一理解为PCIe网络报文。DAG前驱的执行状态归
+SimAI；FlowIR可携带前驱ID供追溯，但SubmitFlow只提交已就绪的通信，
+gem5检查release time而不代SimAI解释/调度模型依赖。
+
+| 层 | 拥有的状态/决策 | 不拥有的状态/决策 |
+|---|---|---|
+| SimAI workload scheduler | 模型phase/layer/microbatch、compute耗时、依赖、可执行任务 | 不计算VOQ/credit/replay导致的真实硬件等待 |
+| SimCCL | communicator、算法、channel/chunk/flow与阶段关系 | 不把NVLink/NET延迟表当PCIe时延，不提供隐式Switch INC |
+| PcieNetwork adapter | 消息匹配、byte语义、flow/消息/callback映射、有限待注入状态 | 不实现第二套Link/Switch服务或第二个仿真时钟 |
+| gem5 runtime/endpoint | rank到endpoint/Function的映射、DMA、Tag、请求/完成组装 | 不将应用message tag作为PCIe Tag，不自行释放业务DAG |
+| gem5 Link/Switch | 各跳路由、ordering、缓存、仲裁、bank/Fabric、FC/replay、周期服务 | 不将固定BW/latency标量代替上述争用执行 |
+
+### 2.2 两侧输入与输出
+
+| 消费方 | 初始化输入 | 运行时输入 | 输出 |
+|---|---|---|---|
+| SimAI | 模型/workload、Train/Prefill/Decode/Diffusion配置、compute profile、TP/EP/DP/PP/SP、rank/communicator、算法策略 | compute定时callback、send/recv完成、失败/终止事件 | 就绪flow、后续compute/控制事件；collective/step及有定义的应用指标 |
+| gem5 | endpoint/port/link拓扑、地址域、protocol能力、MPS/MRRS/RCB、clock/CDC、缓存/VOQ/bank/Fabric/staging/replay预算 | FlowRequest、调度事件、注入/结束/排空命令 | FlowCompletion、可接收通知、结构化错误；逐周期硬件统计与trace |
+| Adapter | API版本、byte/time约定、rank/endpoint/地址窗口映射、匹配和注入窗口策略 | AstraNetworkAPI send/recv/schedule/finish及gem5事件 | 规范化FlowIR与gem5提交；恰好一次的API callback和关联记录 |
+| Result adapter | schema、两个仓库及SimCCL版本、profile/hash、窗口和测点定义 | SimAI任务时间线、gem5硬件计数、flow→request/TLP关联 | 联合ResultBundle、校准结果、未完成量与适用范围 |
+
+对照实验必须共用相同TopologyIR、Hardware/ProtocolProfile与端点服务。
+模型缺compute profile时只输出通信完成时间，不能凭网络结果推导TTFT/
+TPOT；gem5无外部PHY模型时也不声称输出电气或真实GPU执行指标。
+
+### 2.3 通信方式：初始化文件、运行时调用、结束后结果
+
+首版采用**同进程C++调用与异步callback**：gem5集成runner初始化硬件
+对象和SimAI workload/adapter，所有rank的PcieNetwork持同一个runtime
+facade。SCons/CMake的链接边界与版本在M4-06验证，不能在SimAI复制
+一份硬件核心。以下为目标接口，尚未实现，不是现有可执行功能。
+
+| 阶段 | 传输方式 | 内容/语义 |
+|---|---|---|
+| 初始化 | CLI/JSON文件→配置编译器→内存配置对象 | ExperimentSpec、workload/compute、拓扑/资源/能力、placement与版本 |
+| 正向运行 | AstraNetworkAPI→PcieNetwork→runtime的typed C++调用 | 注册接收意图、提交flow、调度控制事件、登记rank finish |
+| 反向运行 | gem5 event→typed完成/可接收事件→adapter callback | 源可复用、目的完整可见、失败、注入恢复；均有flow ID与事件时间 |
+| 仿真结束 | 内存计数/trace→版本化JSON及报告文件 | ResultBundle、统计窗口、样本/未完成、源码/profile/scenario hashes |
+
+运行时不逐TLP写JSON/CSV，不通过文件轮询同步，不新增socket/独立进程
+RPC作为首版依赖。离线Flow CSV可作replay输入，但没有完整依赖就不等于
+SimAI闭环。未来如需跨进程运行，必须另定义序列化、同步/lookahead和
+故障合同，不能套用本章同进程callback语义后声称同步已经解决。
+
+### 2.4 边界消息合同
+
+| 边界消息/调用 | 方向/终止层 | 关键字段 | 所有权与返回意义 |
+|---|---|---|---|
+| RegisterEndpoint / Init | 配置编译器→adapter/runtime | rank、endpoint/Function、地址窗口、communicator映射、profile ID | 初始化时校验；不等于在交换机注册全局Read Tag表 |
+| RegisterRecv | SimAI→adapter matcher | communicator、src/dst、message tag、channel/chunk/sequence、expected bytes、callback ID | 只注册匹配意图；不另生成一份PCIe数据流 |
+| SubmitFlow | adapter→gem5 runtime | flow/application ID、src/dst、payload bytes、release/dependencies、transport、buffer/window、completion contract、callback ID | Accepted仅表示runtime有界接管；Blocked仍由调用方保留；Invalid有明确原因 |
+| SourceReusable | gem5→adapter→SimAI | flow ID、状态、实际tick、可复用范围 | 数据已被保护接管，可触发符合transport合同的send callback；不是recv成功 |
+| DataVisible / ReceiveComplete | gem5→adapter；匹配后→SimAI | flow ID、目的范围、完整字节数、状态、实际tick | 全消息可见且匹配成立后触发recv callback；据此释放所需业务依赖 |
+| Writable / Failure | runtime→adapter/调用者 | 等待窗口/flow ID、资源或错误code、tick | Writable重试待提交对象；Failure显式收束，不伪造成功callback |
+| Schedule / Finish / Drain | adapter→gem5 runtime | 相对时间/事件ID、rank、停止原因 | gem5队列统一调度/排空；一rank finish不立即退出全局 |
+
+RegisterRecv终止于adapter的消息匹配层，不在Switch core创建communicator
+或消息tag状态。gem5只接收已映射flow/端点事务及其完成token；上层匹配
+与硬件Tag/credit/queue各自独立。
+
+API的`count/type`到byte转换在adapter统一完成，request/flowTag临时字段
+必须复制所需值。外部callback用稳定ID关联，不能长期引用调用栈。
+消息tag、flow ID、PCIe Requester/Tag三套身份分别管理。
+
+SimAI现有调用者不一定会处理sim_send的非零返回值，因此adapter不能把
+内部Blocked直接丢给调用者后忘记该请求。必须先建立有界上游注入窗口：
+未获准的任务仍在SimAI/adapter的有限状态中等待Writable；超出已声明
+合同显式拒绝/失败，不能用无限payload队列掩盖硬件反压。
+
+### 2.5 唯一时间所有者和一次闭环
+
+**gem5 EventQueue拥有仿真时间。** SimAI仍决定compute任务耗时及依赖，
+但其`sim_schedule(delta)`委托gem5安排callback；`sim_get_time`读取同一
+时间。没有另一个SimAI/NS3/AnaSim循环与gem5分别向前跑。时间单位和
+Tick转换、同Tick事件/回调次序按§11/§14的合同实现。
+
+```mermaid
+sequenceDiagram
+  participant S as SimAI DAG
+  participant A as PcieNetwork Adapter
+  participant G as gem5 Runtime / PCIe
+  S->>A: sim_schedule(compute duration)
+  A->>G: schedule callback on shared EventQueue
+  G-->>A: compute-ready event
+  A-->>S: compute callback
+  S->>A: send / recv for ready communication
+  A->>G: SubmitFlow / register completion
+  Note over G: DMA / TLP / queue / arbitration / link / endpoint
+  G-->>A: SourceReusable at actual tick
+  A-->>S: send callback if this contract applies
+  G-->>A: DataVisible / full receive complete
+  A-->>S: matched recv callback exactly once
+  S->>A: release dependent communication or compute
+```
+
+若目的端尚未登记recv，adapter保存有界匹配状态，等待匹配再触发recv
+callback；数据先到与recv先到都只完成一次。send源释放不自动解锁需要
+目的可见的任务。Read-pull同样经过反向MemRd与正向CplD，不能省略请求
+链路或首Cpl到达就完成整条flow。
+
+拥塞造成gem5完成事件变晚，继而使SimAI后继任务变晚；这是闭环集成的
+核心验证。只有把一个gem5测得的平均带宽/延迟表导入SimAI，无法表达该
+运行时反压反馈，不满足本设计的cycle-level集成要求。
+
+### 2.6 配置解析与结果汇合
 
 原始输入不变，解析后有效值另存。所有63字段都有schema、默认值、范围、
 条件、单位、adapter映射和测试索引，字段表唯一来源为需求§5/HTML。
@@ -55,6 +193,15 @@ flowchart TB
 输入优先级为HTML默认→显式场景profile覆盖→用户显式覆盖；每次覆盖
 保存diff和来源。0=自动在覆盖之后统一解析。显式容量不足不能被自动值
 替换；无足够信息时拒绝严格模式或要求显式参考模式。
+
+纯硬件运行使用SyntheticSource→同一runtime，不需要启动SimAI；
+`lab_reference`保留HTML参考行为和单独结果标记，不宣称该参考模式有
+SimAI闭环或严格周期精度。两种运行的结果都经统一报告层汇合，但模式、
+来源、时间测点和指标适用范围始终可区分。
+
+章节分工：本章定义层次/通信/I-O；§3定义IR；§4/§12定义硬件模块接口；
+§11定义AstraNetworkAPI具体适配；§14定义gem5对象与周期执行。实施前
+以V-27–V-35分别验证上述时间、匹配、完成、回压和硬件验收边界。
 
 ## 3. 数据对象与接口
 
