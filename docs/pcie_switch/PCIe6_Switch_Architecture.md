@@ -1,6 +1,6 @@
 # PCIe 6.0 Switch 架构设计
 
-版本：v1.0｜日期：2026-11-17｜状态：待实现的架构，不含性能验证结论。
+版本：v1.1｜日期：2026-11-17｜状态：待实现的架构，不含性能验证结论。
 依据[需求v1.0](PCIe6_Switch_Requirements.md)；软件执行合同见
 [仿真架构](PCIe6_Simulation_Architecture.md)，交付顺序见
 [实施计划](PCIe6_Implementation_Plan.md)。
@@ -54,6 +54,9 @@ RX队列与core store均有限，前者保护外链接收，后者隔离出口�
 出口取得受保护副本后，入口引用才能释放。
 
 ### 2.1 模块合同
+
+本表是模块索引；具体内部状态、存储、ordering关系、信用映射、原子
+仲裁和前进性policy见§11。软件对象、消息API及周期执行见仿真架构§14。
 
 | 模块 | 状态/配置 | 释放或提交条件 |
 |---|---|---|
@@ -197,3 +200,238 @@ AstraNetworkAPI适配、消息匹配、共同事件时间和callback合同见仿
 §11。微基准与workload共用硬件资源路径，归约默认发生端点，PCIe-only
 不自动启用NVLS/INC。M4的因果闭环检查要求拥塞真实延迟后继任务，
 不是把gem5吞吐标量导入SimAI就称完成集成。
+
+## 11. Switch微架构详细设计
+
+本节是M2/M3实现选择，不是已实现IP能力。原§1–10的范围与M0–M5顺序
+不变。基本模式为S/F、固定路由、有限存储和RR；所有新增结构参数均写入
+effective ResourceProfile，不能隐藏在HTML的`util`或固定switchNs中。
+
+### 11.1 物理端口、逻辑端口和Slice组织
+
+一个逻辑PCIe port具有独立Link、TC/VC映射、RX backing、TX/replay和
+upstream/downstream角色。Port Macro只是lane/PHY分组，不代替逻辑端口。
+`PortBinding`记录(port_id, link_id, peer_port_id, role, width, rate,
+partition, forwarding_slice)。同一lane不能重复分配；实际PHY分叉合法性
+来自独立profile，不由总lane数推导。
+
+每个Forwarding Slice拥有本地sector pool、bank映射、descriptor池、
+VOQ表、输入写服务与Fabric接入；芯片级Scheduler协调出口和跨区服务。
+M2无物理分区时可视为单个逻辑Slice，仍按每入口配额和有限资源记账。
+M3将port显式映射到Slice，分别限制本地路径和跨Slice路径的服务能力。
+HTML `slices`始终表示Fabric并行通道数，不自动创建物理Slice。
+
+### 11.2 RX front end：接收、分类和admission
+
+每port的`RxContext`包含：VC/class的header槽、data单元、接收中事务、
+待core队列、FC承诺、解析服务可用周期。header/metadata与payload分账。
+MemRd无payload仍需header/descriptor/解析服务，不占假想payload sector。
+
+接收分为LINK_RECEIVING、VALIDATED、WAIT_CORE、CORE_COMMITTED和
+RELEASED。S/F只有完整有效TLP才进入VALIDATED；错误先由所选链路/事务
+profile决定重试或错误处理，再释放其拥有的资源，不向core交付坏payload。
+
+`FrontEnd`每周期同时受`parse_bytes_per_cycle`和`tlps_per_cycle`限制。
+它产生不可变的ParsedHeader、payload handle、目标候选和ordering序号。
+route miss、能力不支持与资源不足是不同结果，资源不足只能等待。
+
+Admission的一次原子bundle为：descriptor槽、所需payload sectors、
+VOQ现有/新建索引槽、入口及class配额。先计算需求再检查全部预算，
+成功后一次commit；失败不扣任何预算，保留RX所有权并登记等待资源。
+core保护建立之前不能返还代表该RX空间的信用。
+
+Admission资源commit与数据写完是两个事件：先进入WRITE_PENDING，core
+sector/descriptor已占用，但RX仍持有效源副本；按bank写服务推进copy。
+最后写入完成后标记payload DATA_READY、将descriptor加入可仲裁集合，再
+释放RX源引用并触发其信用回收。队列可预建占位，但DATA_READY前不可grant。
+header-only请求没有payload写服务，仍需遵守metadata/前端pipeline完成点。
+
+因此写入期间RX与core同时占空间是有意的物理双副本，而非重复应用字节。
+写入失败时已commit的core分配经明确失败retire释放，不能调用未commit
+的cancel；RX错误消费/重试和信用处理由所属协议层决定，不提前当成功。
+
+
+### 11.3 Route Engine与地址域
+
+初始化编译RouteTable：partition、地址base/limit、出口、目标端点、
+bus范围、方向与权限；初版禁止重叠或歧义窗口。请求走地址查询，Cpl按
+Requester ID/bus归属查询，不能用Cpl payload地址作返回路由。
+
+普通透明树中：下行来包优先检查合法peer/downstream窗口，再检查上行
+路径；上行来包须命中合法下行目标，否则走对应错误路径。路由不得把
+TLP送回来源端口形成环。返回path与请求path独立计算并可trace验证。
+
+M0拓扑只做结构检查；M2构造真实port/link/window图，并验证每条实验
+flow的可达路径和lane/port预算。动态窗口变化在M5处理，需停止新准入并
+排空或使用显式route epoch，不改写在途descriptor的目的解释。
+
+### 11.4 Order Engine：依赖而不是全局FIFO
+
+默认RO=0、IDO=0、同TC内比较；不同TC不人为增加协议ordering边。
+每个入口/partition/TC维护接收序号，descriptor另保存Requester ID、Tag、
+出口及方向。Requester/Tag用于同请求Cpl排序，不能把不同Requester一律
+视为互不相关而漏掉P与后续事务的关系。
+
+M2基线采用显式标记的保守入口顺序域：同入口、partition、TC内按规范
+关系建立依赖；必要的跨源归并由输入链路与选定路由策略定义。保守域
+可能阻塞不同出口的可选越过，须报告该限制；优化域必须另给条款/场景
+证明，不把额外串行化结果宣传为non-blocking能力。
+
+| 后到事务 / 早到事务 | P：MemWr | NP：MemRd | CplD |
+|---|---|---|---|
+| P：MemWr | 等早P提交 | 必须能绕过阻塞NP | 可越过，按明确策略 |
+| NP：MemRd | 等早P提交 | 可越过，基线class内FIFO | 可越过，按明确策略 |
+| CplD | 等早P提交 | 必须能绕过阻塞NP | 同Request ID保持地址顺序；不同请求可选 |
+
+该表是Base Spec §2.4.1/Table 2-42（印刷页222–224）在所选普通内存
+事务子集的实现索引，不覆盖RO/IDO、带数据NP、IDE和其他例外。
+“提交”在M2保守模型指早TLP最后字节进入该出口Link发送服务，不代表
+远端内存已经可见。优化为更早提交点前必须证明不会改变同出口发送顺序。
+
+`isEligible(desc)`检查其禁止越过的前驱是否已提交；P/Cpl绕过NP不能因
+共享单FIFO或一个阻塞head失效。至少分P/NP/Cpl队头，Cpl内保留同Tag
+片段顺序。采用每class未退休序号集合与依赖计数，相关前驱退休后唤醒；
+不在每次仲裁遍历历史全部事务。关系变更必须有V-10反例和前进性trace。
+
+### 11.5 Payload Store、descriptor与VOQ数据结构
+
+Payload Store存TLP有效payload；完整header保存在descriptor。sector需求
+为`ceil(payload_bytes / sector_bytes)`；内部Fabric则按所选header+payload
+cell化合同收费，不能将这两个rounding混成同一容量。0B payload需要0个
+payload sector，但仍需要metadata、VOQ和传输服务。
+
+`StoreHandle`为(pool_id, object_id, generation, sector_chain, valid_bytes)。
+allocator维护free-list及used/reserved/free，按入口和class执行保底/共享
+配额。generation用于检测过期句柄；复用object ID不接受旧release。
+M3可用`bank=(sector_index mod bank_count)`作为初始可重放映射；其他hash
+作为profile选择记录，不使用宿主语言不稳定hash。
+
+`ForwardDescriptor`含header、store handle、ingress/egress、VC/class/TC、
+ordering domain/sequence、timestamps、route epoch和当前owner。
+VOQ key为(ingress, egress, VC, class, ordering_domain)，payload不复制。
+每入口维护active-key表与每出口active-head列表；空队列回收前确认没有
+在途grant引用，descriptor独立从全局/局部池归还。
+
+HTML `voqDepth`是Cell额度，`descriptor`是参考预算字节；实际descriptor
+数量、队列索引数、Cell配额分别限制。不能把每Cell一个descriptor的参考
+预算直接当成每TLP实现布局；结果同时输出参考预算与实际对象数。
+
+### 11.6 Scheduler：确定性两步联合仲裁
+
+每出口维护RR游标，输入候选来自active heads，先过滤ordering，再过滤
+出口可接收条件。以稳定出口轮转顺序构建grant；同周期多出口竞争同一
+bank、Fabric通道或入口读端口时使用同一轮shadow资源快照消除冲突。
+
+一次首Cell grant联合预留：完整TLP的出口staging配额、一个可服务bank
+读slot、Fabric/本地路径slot和有限in-flight transfer记录。检查全部可用
+之后在一个线性化点commit，随后才移除VOQ head、转移descriptor owner
+并推进RR。检查失败不推进游标、不持有部分token、不消耗服务slot。
+
+多Cell TLP进入ACTIVE_TRANSFER，staging保留其完整空间；后续Cell逐次
+获取bank/Fabric服务，不提前锁定未来所有周期。continuation参加显式
+公平仲裁，不能无限饿死新包；每次服务有实际字节和结束事件。失败时
+in-flight descriptor保留已有进度，不重复取走VOQ或重复分配staging。
+
+M2先按aggregate Fabric服务预算执行同一生命周期；M3再增加bank/
+parallel channel/cell服务。两种精度不改变容量和所有权，只改变服务完成
+时刻。真实下游Link credit不一定在首grant就可用，staging允许有限解耦；
+credit耗尽最终填满staging并逐级反压，而不是整个core无条件停转。
+
+### 11.7 SRAM、Fabric与CDC服务
+
+每bank独立声明读/写端口数、beat宽度、读延迟和周期。1R1W可同周期一
+读一写，不是任意两个读；单端口profile的读写互斥。大sector需多beat时
+按实际beat占用服务，不能只增加一个固定延迟但不扣带宽。
+
+Fabric区分本地与跨区通道、Cell数据/metadata、服务宽度、频率、pipeline
+和slot数。读取完成→Fabric进入→出口接受分别有事件；一条通道可pipeline
+接收但在途slot有限，吞吐/延迟/容量不能用一个free_tick混合表示。
+跨时钟用有界队列与目标时钟取整后的服务事件，记录CDC延迟；这只是
+仿真抽象，不声明实现了可签核的硬件CDC电路。
+
+bank/Fabric的每个slot都有开始/结束与token ID，完成事件释放对应token。
+源payload在最后Cell受staging保护后才减少入口引用，不能在首Cell读完
+时归还整包存储。完整staging建立前不在S/F模式发送不完整TLP。
+
+### 11.8 Egress、Link TX与replay
+
+Egress按VC/class有有限重组/待发送状态，保留header、有效字节、到齐范围
+与发送序。WAIT_DATA→READY→TX_ACCEPTED→RETIRED；重复Cell或缺口
+产生明确错误，不用未初始化字节填补。完整READY包仍需通过TX ordering。
+
+TX同时受端口服务、link串行化、FC gate和replay保护约束。port内部服务
+与wire服务可串接或重叠，profile写明pipeline，不能简单相加两份包含同一
+传输的数据延迟。Link每方向next_available独立，不把双向raw当单向容量。
+
+replay持有可重构TLP信息/必要序号，ACK后才释放。详细FLIT重新生成DLP，
+重传占wire但不新扣事务信用、不重复交付应用。无错TLP预算profile可用
+显式近似ACK服务，但不能因此宣称NAK/timeout/窗口序号协议已实现。
+Link reset后旧ACK/Cpl不得释放新generation对象；错误恢复另按profile
+处理，不把局部reset无条件映射为远端Request成功。
+
+### 11.9 外链信用到接收存储的映射
+
+CreditManager分离逻辑FC单位与物理backing。data基本单位为16B；header
+unit须能容纳所选端口/能力的最大header/trailer，不等于HTML的reqHeader。
+基础MemRd消耗NP header，MemWr消耗P header/data，CplD消耗Cpl header/
+data，具体cost由协议policy返回，不在多个模块各算一遍。
+
+| 状态 | 维护内容 | 更新点 |
+|---|---|---|
+| RX backing | 各dedicated/shared池的总量、占用及仍可被信用消费的承诺 | 初始化/接收/出队/更新准备 |
+| TX FC | cumulative limit/consumed、field width、scale、pool/VC usage | 收到FC更新/通过send gate |
+| RX update | freed但未通告量、已经排队的更新、in-flight更新 | 出队累加，阈值或最大update延迟触发 |
+| Group packing | Shared FC所用credit group及未使用余量 | 新group/后续TLP复用/满足释放粒度 |
+
+M3按Base Spec §2.6.1（页236–242）实现Shared FC的group消费/释放：
+未merged的适用class按4-credit group，允许P/Cpl merged时按其8-credit
+合同处理；同group余量和计数用途不可丢弃。Table 2-45的基础单位计费
+不等于每个FLIT TLP都独立扣1H及ceil(payload/16)D。
+
+初始化通告值要有真实backing且满足规范最小值；RX release产生pending
+更新，控制发送服务与传播后更新TX limit。阈值/最大延迟是可配置实现
+策略，不允许无限拖延造成永久停顿。模计数采用字段位宽、scale及规范
+gate比较，必须有wrap边界fixture；不能用宿主整数直接减模字段后判断负数。
+
+dedicated与shared、启用与能力、P/Cpl merged分别保存。RX可不启用
+Shared FC，但FLIT TX必须声明相应能力；Merged FC未实现时明确拒绝。
+core释放不直接改TX邻居credit，只有相应RX backing释放事件可驱动更新。
+
+### 11.10 前进性资源与故障收束
+
+基础profile禁止把全部RX/core/descriptor空间配置为NP可独占共享池。
+每启用VC/class的dedicated资源至少满足该profile规范最小通告和最大
+单事务接收要求；内部P/Cpl各保留独立header/descriptor及最大所支持
+payload的可前进空间。NP MemRd保留header但不虚构data保留需求。
+
+共享准入不得消耗其他class保底；P与Cpl所需出口/staging服务也必须有
+合法获得机会。Link控制更新/ACK使用有限独立控制队列与服务机会，不
+依赖先发出被其阻塞的数据。此处保底是架构policy，不是死锁证明。
+
+启动时构建class/queue/bank/staging/replay/endpoint依赖图，检查profile
+和树路由的等待环；运行时记录wait-for对象和年龄。必须能让P/Cpl绕过
+阻塞NP，Read不能在持住其返回必需的所有Cpl空间时继续无限发起。
+排空证明只针对有限注入、sink/ACK/FC阻塞有界、仲裁持续服务的场景；
+失联端点由超时/失败合同收束，不能归为可正常完成的排空。
+
+### 11.11 管理、错误与统计边界
+
+配置分结构错误、协议能力缺失、路由/权限错误和运行时协议错误；资源
+暂满是Blocked而不是Error。错误记录带port/descriptor/request/epoch和
+首个失败原因。诊断保留首错，避免后续清理错误覆盖原始原因。
+
+Stats按应用payload、TLP、FLIT/wire、Fabric Cell分别累计，输出每周期
+解析/读写/grant/发送服务和各资源占用；peak在预留/提交/释放定义好的
+观察点采样。一次阻塞episode记录起止和原因，不能每次重试都算一个新
+stall事件；持续时间与次数分别报告，复合原因提供主因及secondary mask。
+
+trace可按flow/request/port/时间窗过滤，但关闭trace不能改变调度顺序。
+warmup/measurement/drain对arrival cohort、completed bytes和删失样本
+定义一致；过载/样本不足不能用无条件P99/P999判断掩盖。
+
+### 11.12 模块完成条件
+
+M2退出要求端点、RX/Core/VOQ/Scheduler/Fabric/Egress/Link在容量和
+回调合同下组合正确；M3增加周期bank/FLIT/FC/replay及选定错误覆盖。
+V-03–V-18/21–V-25/35分别绑定上述模块，具体映射见实施计划的设计索引。
+模块测试先于实现，TDD不替代本节的结构、算法和通信设计。

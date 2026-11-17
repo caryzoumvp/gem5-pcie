@@ -1,6 +1,6 @@
 # PCIe 6.0 Switch gem5 仿真架构
 
-版本：v1.0｜日期：2026-11-17｜状态：M0 host配置合同已实现；数据面待实现，无仿真结果。
+版本：v1.1｜日期：2026-11-17｜状态：M0 host配置合同已实现；数据面待实现，无仿真结果。
 依据[需求v1.0](PCIe6_Switch_Requirements.md)，硬件资源见
 [Switch架构](PCIe6_Switch_Architecture.md)，阶段与证据见
 [实施计划](PCIe6_Implementation_Plan.md)。
@@ -213,7 +213,8 @@ tests/gem5/pcie/           # TestLib回归
 2. Link发送资格同时检查方向串行化状态、对端FC和所选replay模型；
    接收进入有backing的RX队列。TLP预算和详细FLIT各自声明事件粒度。
 3. S/F校验成功后route lookup选择出口，Order Engine产生eligible；
-   Admission原子预留core sector/descriptor，再接受RX→core转移。
+   Admission原子预留core sector/descriptor，安排RX→core写入；数据到齐
+   DATA_READY后才允许仲裁，源RX副本释放单列事件。
 4. VOQ保存descriptor与payload引用，Scheduler被入队、资源释放或服务
    完成事件唤醒。联合检查bank/Fabric/staging，失败保留队头及原因。
 5. grant后生成有限服务完成事件；出口取得保护副本后才释放入口引用。
@@ -387,7 +388,8 @@ cycle runtime仍保留作对照，不把1024卡逐FLIT作为首版集成门槛�
 | FlowCompletion | flow/application ID、源可复用/目的可见/接收完成类别、status、tick | runtime统一发事件；callback注册者负责消费一次 |
 
 Request状态为waiting-for-budget→issued→collecting→complete/failed；
-forward状态为rx-protected→core-queued→granted→egress-protected→retired。
+forward状态为rx-protected→core-write-pending→core-ready-queued→granted→
+egress-protected→retired。
 错误路径必须说明由谁保留最后副本及失败通知，不能通过删除队头隐式失败。
 
 ### 12.2 接口边界和回压
@@ -400,7 +402,7 @@ Blocked(reason, wake_source)和Error(code)。Blocked不取得调用者对象，
 |---|---|---|
 | TrafficSource→Requester | `tryIssue(ApplicationTransfer)` | 本地有限队列/descriptor有空间才接受；Read还须Tag和Cpl预算 |
 | Requester→Link TX | `trySend(TlpRef, callback_token)` | TX服务、适用FC和replay空间原子检查；接管后才允许源对象释放 |
-| Link RX→Core Admission | `tryAdmit(RxHandle, RouteDecision)` | core sector+descriptor+VOQ索引配额原子预留；成功才转移RX保护 |
+| Link RX→Core Admission | `tryAdmit(RxHandle, RouteDecision)` | 原子预留sector/descriptor/VOQ；写入完成建立core保护后才释放RX副本 |
 | Admission→VOQ | `enqueue(DescriptorHandle)` | 已commit descriptor，按出口/VC/class/order域入队；不能另复制payload |
 | VOQ/Store→Scheduler | `eligibleHeads()` / `readRequest()` | Order Engine先给eligible；仲裁不从中间跳过禁止越过项 |
 | Scheduler→Fabric/Egress | `tryGrant(TransferGrant)` | bank读+Fabric slot+staging同时预留；失败全回滚，RR状态不误推进 |
@@ -462,3 +464,153 @@ make_result；`cli.py`为已实现的host校验入口，`hardware_fields.json`�
 effective、覆盖历史、source/contract/manifest hash及每字段UI单位；
 通用IR单位另列，不把原始ns/KiB/GB/s值误称已转换为ps/B/B-s。
 详细硬件服务、M1自动值和M2/M3周期行为仍按前文设计实现。
+
+## 14. gem5组件组织、内部接口与周期执行设计
+
+本节将硬件架构§11映射到拟实现C++对象。除M0工具外，下面的类/API、
+事件和文件均为实现设计，尚未创建或编译；不是另一条模型降低路线。
+
+### 14.1 对象装配与构建边界
+
+| 对象 | 建议形式 | 所有状态与职责 |
+|---|---|---|
+| PcieRuntime | 一个实验级SimObject/facade | endpoint/port注册表、ID生成、事件提交、callback/finish/drain与结果 |
+| PcieEndpoint | ClockedObject | DMA/Requester/Completer队列、Tag/Cpl预算、抽象memory service |
+| PcieSwitch | ClockedObject | port/controller集合、Route/Order、Slice资源、VOQ/Scheduler/Fabric |
+| LinkDirection | port/link内部组件 | 串行化、传播、FC/replay与对端RX，不独立推进时间 |
+| Store/Voq/Order/Allocator | 可GTest的普通C++组件 | 纯资源/关系决策及显式状态，不接收gem5 Packet |
+| PacketAdapter | RequestPort/ResponsePort边界 | Packet保留、retry/response、父事务映射；不再转发到旧PCI桥捷径 |
+| SimAIAdapter | M4客户端 | 持Flow/消息/callback映射，仅访问runtime facade |
+
+初始化顺序：读取M0/后续effective配置→创建endpoint/switch/link→绑定
+port和地址/ID路由→验证拓扑/容量/能力→建立RX承诺→注册统计与trace→
+允许traffic启动。未初始化FC的严格Link不能接受新TLP；预设link-up模式
+也要明确执行配置状态建立，不把所有limit设为无限。
+
+SCons分别注册SimObject/source及单元测试；host schema/sizing不依赖
+Simulator启动。M4桥接链接这些对象，不能再复制C++核心到SimAI临时目录。
+
+### 14.2 消息类型与调用合同
+
+内部提交采用typed message与句柄，非裸void*数据包；callback可用稳定
+CallbackId关联外部fun_arg，生命周期由adapter管理。
+
+| 接口 | 输入/返回 | 接管与重试 |
+|---|---|---|
+| `submitFlow` | FlowSpec→Accepted(FlowId)/Blocked/Invalid | Accepted后runtime保留完整父状态；Blocked时调用者保留输入 |
+| `reserveAdmission` | ParsedTlp+Route→ReservationBundle/Blocked | reservation尚未入VOQ，不能发成功callback；失败无副作用 |
+| `commitAdmission` | bundle+RxHandle→WritePendingDescriptor | 资源commit，RX源副本仍保留；写入完成后DATA_READY，才释放RX backing |
+| `cancelAdmission` | bundle+reason | 仅适用于未commit；已commit不能用cancel掩盖协议失败 |
+| `selectGrant` | heads+resource snapshot→GrantPlan | 纯计划，不pop队列/改RR/扣资源 |
+| `commitGrant` | GrantPlan→TransferId | 重新确认对象版本；全部token提交后才pop一次；stale plan重选 |
+| `onTransferProgress` | TransferId+cell range+tick | 去重、更新staging range与token，不再次消费VOQ |
+| `onTxAccepted` | ProtectedHandle+TxId | source引用与TX/replay引用按定义分离；无保护副本不可成功 |
+| `onRetired/onFailure` | ID+status+epoch | 向父Request/Flow聚合一次；返回预算按所属账本分别释放 |
+
+ReservationBundle含每pool的token及版本，采用作用域rollback guard确保
+异常/early return归还未提交预留。commit是模型状态转换，不依赖C++内存
+析构来决定仿真释放时刻；持有对象析构前必须显式retire或失败收束。
+
+每条消息带port_id、request/descriptor/transfer ID和epoch；payload用
+只读BufferHandle，重组memory单独可写。debug断言拒绝同一owner二次
+移交。release回调只释放其对应generation，旧ACK/旧Cell不得作用于新对象。
+
+### 14.3 周期phase与同Tick规则
+
+使用gem5现有事件队列，但不依赖同priority事件的插入顺序决定仲裁。
+每clock domain维护一个可合并ServiceEvent和输入mailbox；到达/释放事件
+先更新ready记录，domain pump以稳定ID顺序消费并创建同一轮snapshot。
+
+1. collect：吸收在本边沿前已到期的data/control/release，过期token报错。
+2. evaluate：对snapshot计算parse/admission/eligible/grant/发送计划；无副作用。
+3. commit：一次更新资源和队列，登记完成时刻与未来事件；新入流水级
+   不在同一轮重新穿越所有阶段，除非profile明确存在组合bypass。
+4. observe：记录计数/峰值/trace，提交异步callback；不inline重新仲裁。
+
+拟将收集事件、domain service和上层callback使用明确本地priority/phase
+约束；实现须核对`src/sim/eventq.hh`保留优先级并通过V-21。若本Tick某
+phase已执行，新产生该phase工作转入下一合法服务边沿，不在同Tick回到
+更早phase制造零延迟闭环。外部Packet到达/SimAI注入同样遵守这一规则。
+
+跨domain完成先经传播/CDC事件到达mailbox，再按目标clock edge取整。
+调度使用整数Tick，记录原始ps→Tick及目标edge取整。统计采样不改变
+phase，关闭trace不改变排序；callback顺序稳定但callback不拥有硬件时间。
+
+### 14.4 仲裁伪代码与资源线性化
+
+```text
+serviceEdge(t):
+    ingestReadyMessages(t)
+    snapshot = captureResourceState()
+    candidates = eligibleActiveHeads(snapshot)
+    plans = []
+    for output in rotatingStableOutputOrder():
+        for head in roundRobinCandidates(output):
+            plan = planFirstCellOrContinuation(head, snapshot)
+            if plan.valid:
+                reserveInShadow(snapshot, plan)
+                plans.append(plan)
+                break
+    validateNoConflicts(plans)
+    commitAll(plans)  # one VOQ pop / token set / RR advance per accepted plan
+    scheduleCompletionsAndWakeups(plans)
+    emitObservations(t)
+```
+
+bank服务窗口、Fabric slot和出口staging有不同生命周期：bank读slot在
+读服务结束释放，Fabric在Cell被下级接受/slot合同满足后释放，整包staging
+在TX取得保护副本后释放。不能因为一个grant“完成”就同时归还全部token。
+首Cell与continuation分别计服务，每TLP descriptor只从VOQ移交一次。
+
+M2可用aggregate服务计算TransferProgress，仍保留有限in-flight记录和
+独立staging。M3改为Cell/beat事件时复用相同接受/引用/完成合同，校验
+新增pipeline状态没有产生隐藏无限容量或多扣信用。
+
+### 14.5 具体内部传输例（仅说明合同）
+
+取一个64B MemWr、16B建模header、64B内部Cell、64B payload sector。
+RX至少保护一条完整TLP的header/data；core store占1 sector，内部Fabric
+计2 Cell及各Cell metadata，egress staging也按2 Cell预留。应用有效字节
+仍为64，不因两个Cell计成128B；header存descriptor，不再占额外payload
+sector。sector/Cell/credit三种计量分别输出。
+
+若core仅余1 descriptor但无payload sector，Admission失败，RX保留数据、
+core所有计数不变。若Admission成功、写入DATA_READY后egress仍满，
+descriptor在VOQ等待，
+RX真实出队可触发信用回收；core payload仍持有，不因此被提前释放。
+若已有staging但下游credit耗尽，staging保持READY/blocked，其他可服务
+出口继续仲裁；末Cell保护/ACK/应用可见分别在各自事件上完成。
+
+该例未指定wire/FLIT时长，不能由内部2 Cell直接推出链路2 FLIT。
+实际wire packing、header格式和credit group由所选protocol profile计算。
+
+### 14.6 Request/Completion聚合和外部完成
+
+Requester每Function持TagAllocator与OutstandingTable，key含Request ID和
+协议身份。每条record维护expected bytes、received ranges、片段状态、
+父应用remaining request计数和Cpl预算。解析错误先走失败合同，再清理，
+不能先删除record使晚到Cpl误命中新复用Tag。复用前generation/epoch隔离。
+
+Completer收到MemRd后按有限memory服务产生计划，真实CplD由反向TX
+接受才进入在途；blocked不能重复生成同一片段。payload段按地址递增，
+每片header反映剩余Byte Count与Lower Address，父请求收齐才返Tag。
+Posted Write在sink提交一次，adapter响应阻塞不能重复执行该提交。
+
+ParentFlow保存required完成种类：源可复用、目的可见或接收匹配完成；
+Requester/Completer不能直接调用SimAI或外部fun_arg。它们发typed completion
+给runtime聚合，runtime再在callback phase交给client。失效client/未匹配
+消息由M4生命周期合同处理，不影响底层资源守恒。
+
+### 14.7 失败、清理与debug表
+
+| 情形 | 行为 | 必需dump |
+|---|---|---|
+| 未知/重复句柄或epoch不符 | 诊断首错，不释放其他代对象 | owner/generation/reservation历史 |
+| 资源Blocked | 保留原owner，订阅对应wake source | 原因mask、开始tick、需求/可用量 |
+| unsupported TLP/profile | 启动前拒绝或协议定义失败路径 | 能力/规范条款/输入ID |
+| in-flight协议错误 | 按层级处理retry或终止，不冒充成功 | 链路序号、Request/Cpl状态、保护副本 |
+| 有界环境下drain超时 | FAIL并保留现场，不强制清空后PASS | queue/Tag/credit/Fabric/staging/replay等待图 |
+
+debug snapshot应能重建`who owns what and why it waits`：每资源总量/
+used/reserved/free、每对象owner、每blocked依赖以及scheduled/pending
+事件。以此区分正常过载、永不ready环境、遗漏wake和真实资源等待环。
