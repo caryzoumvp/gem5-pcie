@@ -1,0 +1,1835 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="PCIe 6.0 多卡通信建模、拓扑评估与验证记录"><title>PCIe 6.0 Scale-up 需求分析台 · 离线版</title><style>
+:root{color-scheme:light;--bg:#f5f6fa;--ink:#1b2135;--muted:#616a82;--line:#e1e5f0;--blue:#4c48c7;--purple:#6560e2;--soft:#efeffe;--bad:#b53049;--warn:#925313;--green:#087966;font:14px/1.55 Inter,"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink)}button,input,select,textarea{font:inherit}button,select{cursor:pointer}a{color:#4540ad}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #7169ed;outline-offset:2px}[hidden]{display:none!important}
+.sidebar{width:208px;background:#14182c;color:#e5e8f9;position:fixed;inset:0 auto 0 0;padding:25px 15px;display:flex;flex-direction:column;z-index:3}.brand{display:flex;align-items:center;gap:12px;font-weight:750;font-size:19px;padding:0 8px;letter-spacing:-.3px}.brand small{display:block;font:700 9px/1.6 Inter,system-ui;letter-spacing:1.9px;color:#a5afd3}.mark{width:38px;height:38px;display:grid;place-items:center;background:#746bf0;border-radius:11px;font-size:25px;color:#fff}.sidebar nav{display:grid;gap:5px;margin-top:36px}.sidebar nav button{border:1px solid transparent;background:none;color:#bcc4df;text-align:left;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:12px;font-weight:650;white-space:nowrap}.sidebar nav button span{font-size:18px;line-height:1;width:19px;text-align:center}.sidebar nav button:hover,.sidebar nav button[aria-current]{background:#2b2c51;color:#fff;border-color:#3c3b66}.sidebar nav button[aria-current] span{color:#bdb7ff}.sidefoot{margin-top:auto;border-top:1px solid #333851;padding:16px 8px 0;color:#dce2f5;font-size:12px}.sidefoot small{display:block;margin:5px 0 0 13px;color:#a5afd3}
+main{margin-left:208px}.top{height:61px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 29px;color:var(--muted);font-size:13px}.top strong{color:var(--ink)}.slash{padding:0 12px;color:#818aa5}.topactions{display:flex;gap:8px}.btn{border:1px solid #dce1ef;background:#fff;color:#323954;border-radius:8px;padding:8px 13px;font-weight:650;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}.btn:hover{background:#f0efff;border-color:#b6b2ed}.btn.primary{background:#514bcd;color:#fff;border-color:#514bcd;box-shadow:0 3px 7px #514bcd30}.btn.primary:hover{background:#423bb4}.top .btn{padding:5px 12px}
+.page{max-width:1600px;margin:auto;padding:27px 29px 50px}.hero{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:20px}.eyebrow{letter-spacing:1.6px;font-size:10px;font-weight:800;color:#514ab8;margin:0 0 6px}.dot{display:inline-block;width:7px;height:7px;background:#786de9;border-radius:100%;vertical-align:1px;margin-right:5px}.sidefoot .dot{background:#66d9bb}h1,h2,h3,p{margin-top:0}h1{margin-bottom:5px;font-size:clamp(23px,3vw,35px);line-height:1.22;letter-spacing:-.035em}h2{font-size:16px;margin:0;letter-spacing:-.02em}h3{font-size:14px;margin:0 0 7px}.sub,.sectionhead p{margin:0;color:var(--muted);font-size:13px}
+.scenario{display:grid;grid-template-columns:1fr 1fr 1.3fr auto;align-items:end;gap:14px;padding:12px 15px;background:#fff;border:1px solid var(--line);border-radius:11px;margin-bottom:13px}.selector label{display:block;margin-bottom:4px;font-size:11px;font-weight:750;color:var(--muted)}input,select,textarea{width:100%;min-width:0;border:1px solid #dce1ee;background:#fff;color:var(--ink);border-radius:7px;padding:6px 8px;min-height:33px}input[type=checkbox]{width:16px;height:16px;min-height:0;accent-color:var(--blue);margin:0}textarea{resize:vertical}.pill{display:inline-flex;align-items:center;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:750;white-space:nowrap}.theory{color:#4943b8;background:#eeecff}.scenario .pill{margin:0 0 4px 3px}.simulation{background:#e7f2ff;color:#275990}.measured{background:#e1f6ef;color:#096653}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}.kpi{padding:13px 14px;background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0}.kpi .label{color:var(--muted);font-size:12px;font-weight:700}.kpi strong{display:block;font-variant-numeric:tabular-nums;font-size:clamp(18px,2.15vw,28px);line-height:1.35;letter-spacing:-.04em;margin:4px 0 2px}.kpi strong small{font-size:11px;letter-spacing:0;font-weight:700;color:var(--muted)}.kpi .detail{font-size:11px;color:var(--muted)}.bad{color:var(--bad)}.warn{color:var(--warn)}.good{color:var(--green)}.meter{margin-top:6px;height:4px;border-radius:9px;background:#ebedf7;overflow:hidden}.meter i{display:block;height:100%;background:#7269ec}.meter.hot i{background:#e46a7f}
+.workgrid{display:grid;grid-template-columns:minmax(272px,.77fr) minmax(0,1.8fr);gap:14px;align-items:start}.results{display:grid;gap:14px;min-width:0}.card{border:1px solid var(--line);border-radius:11px;background:#fff;min-width:0;overflow:hidden}.sectionhead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:13px 15px}.sectionhead p{font-size:12px;margin-top:2px}.linkbtn{background:none;border:0;padding:3px 2px;color:var(--blue);font-weight:700;white-space:nowrap}.linkbtn:hover{text-decoration:underline}
+.config form{padding:0 13px 12px}.config details{border-top:1px solid var(--line);padding:8px 0}.config summary{font-size:12px;font-weight:750;cursor:pointer;padding:1px 0 3px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 8px;padding:5px 0 3px}.field{display:grid;align-content:start;gap:4px;min-width:0;font-size:11px;font-weight:650;color:#505b75}.field input,.field select{font-size:13px;font-weight:500}.field.wide{grid-column:1/-1}.field.check{display:flex;align-items:center;gap:7px}.hint{font-size:11px;color:var(--muted);margin:3px 0 0}.config .hint{margin:5px 0}
+.topo{background:#191e38;border-color:#242b4c;color:#f3f4ff}.topo .sectionhead p{color:#b6c0e2}.topology-pill{background:#30365f;color:#dcdfff}.topo #diagram{min-height:190px;padding:0 12px;background:radial-gradient(#44496b 1px,transparent 1px) 0 0/16px 16px;overflow:auto}.topo svg{width:100%;min-width:390px;height:auto;display:block}.legend{display:flex;gap:16px;padding:8px 15px;color:#c1c9e4;font-size:11px;border-top:1px solid #303658}.legend i{display:inline-block;width:13px;height:2px;background:#9b93ff;vertical-align:3px;margin-right:4px}.legend span:nth-child(2) i{background:#60c8d5}.legend span:nth-child(3) i{background:#ff7e99}
+.notice{margin:0 14px 8px;padding:8px 10px;border-radius:6px;border-left:3px solid #7970e9;background:#f2f0ff;color:#42398b;font-size:12px}.notice.bad{background:#fff0f2;border-color:#e36b81;color:#9d2c42}.notice.warn{background:#fff5e8;border-color:#db9a4d;color:#854a0b}.notice.good{background:#eaf8f4;border-color:#43aa98;color:#08715f}.insight{padding-bottom:5px}
+.scroll{overflow:auto}.portscroll{max-height:420px}table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}th,td{padding:8px 12px;text-align:left;border-top:1px solid #e9ecf4;white-space:nowrap}th{background:#f4f5fa;color:#59637d;font-weight:750}td:first-child{font-weight:650}tr.hotrow td{background:#fff1f3}tr.warmrow td{background:#fff7ed}tbody tr:hover{background:#f7f7fe}.formulas #formula-body{padding:0 15px 12px}.formulas details{border-top:1px solid var(--line);padding:9px 0}.formulas summary{cursor:pointer;font-weight:700}.formulas details p{margin:7px 0;font-size:12px;color:#49536c}.viewtabs{display:flex;flex-wrap:wrap;gap:6px;padding:0 15px 12px}.viewtabs button{background:#f0f2f8;border:1px solid transparent;border-radius:7px;color:#414b66;padding:6px 10px}.viewtabs button[aria-pressed=true]{background:#eceaff;border-color:#d4cff9;color:#473fba;font-weight:750}.templategrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(275px,100%),1fr));gap:14px}.templatecard{padding:14px;display:flex;flex-direction:column;gap:8px}.templatecard h2,.templatecard p{margin:0}.templatecard p,.record p{color:var(--muted);font-size:13px}.templatecard .btn{align-self:start;margin-top:auto}.tags{display:flex;gap:6px;flex-wrap:wrap}.tags .pill{background:#edf0fa;color:#414b66}.entryform{padding:0 15px 15px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.entryform .wide{grid-column:1/-1}.entryform button{justify-self:start}.stacked{margin-top:14px}.record{padding:10px 15px;border-top:1px solid var(--line)}.record p{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}.recordhead{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.recordhead time{margin-left:auto;color:var(--muted);font-size:11px}.record .linkbtn{margin:5px 12px 0 0}.empty{padding:13px 15px;color:var(--muted);margin:0}.diff-select{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 15px 12px}.explain{font-size:12px;color:var(--muted);padding:0 15px 10px;margin:0}dialog{border:1px solid var(--line);border-radius:12px;padding:19px;width:min(450px,calc(100% - 30px));box-shadow:0 10px 50px #191e3845}dialog::backdrop{background:#15182b88}dialog label{display:grid;gap:4px;margin-top:11px}.dialog-actions{margin-top:13px;display:flex;gap:8px;justify-content:flex-end}#toast{position:fixed;right:20px;bottom:20px;max-width:min(440px,90vw);padding:9px 13px;background:#232746;color:#fff;border-radius:8px;z-index:5}
+@media(max-width:1100px){.sidebar{width:168px}.sidebar .brand{font-size:17px}main{margin-left:168px}.page,.top{padding-left:18px;padding-right:18px}}
+@media(max-width:850px){.sidebar{width:100%;position:static;padding:9px 12px;gap:8px}.sidebar nav{display:flex;overflow:auto;margin:0;gap:3px}.sidebar nav button{padding:5px 8px;font-size:12px;gap:4px}.sidefoot{display:none}main{margin-left:0}.top{height:42px}.page{padding-top:16px}}
+@media(max-width:650px){.workgrid{grid-template-columns:1fr}.hero{align-items:flex-start;flex-wrap:wrap}.scenario,.kpis,.entryform{grid-template-columns:repeat(2,minmax(0,1fr))}.scenario .pill{justify-self:start}.page,.top{padding-left:11px;padding-right:11px}.topo svg{min-width:320px}}
+.topology-toolbar{display:flex;align-items:end;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px}
+.topology-toolbar .viewtabs{padding:0}
+.template-filters{display:flex;gap:10px}
+.template-filters select{min-width:110px}
+.native-grid{grid-template-columns:repeat(auto-fit,minmax(min(335px,100%),1fr))}
+.native-card{gap:9px}
+.native-card h2{font-size:17px}
+.native-diagram{overflow:hidden;background:radial-gradient(#454266 1px,transparent 1px) 0 0/14px 14px,#1d213b;border-radius:8px;min-height:122px;display:grid;align-items:center}
+.native-diagram svg{width:100%;display:block;max-height:167px}
+.native-card dl{display:grid;grid-template-columns:72px 1fr;gap:4px 8px;font-size:12px;margin:0;padding:7px 8px;background:#f4f4fe;border-radius:6px}
+.native-card dt{font-weight:750;color:#4a458f}
+.native-card dd{margin:0;font-weight:650}
+.native-card .native-links{font-size:12px;margin-top:auto}
+.port-pager{position:sticky;top:0;display:flex;align-items:center;gap:7px;background:#fff;padding:7px 12px;color:var(--muted);font-size:12px}
+.port-pager span{margin-right:auto}
+.port-pager .btn{padding:3px 8px}
+.port-pager .btn:disabled{opacity:.45;cursor:default}
+.switch-budget summary{cursor:pointer;padding:8px 12px;background:#f4f5fa;color:#59637d;font-weight:700}
+.native-scope{color:#d5dbf3;padding-top:8px}
+.native-scope a{color:#c8c2ff}
+#diagram:has(+.native-scope:not([hidden])) svg{max-height:215px}
+
+.hw-docs{display:grid;gap:4px;text-align:right;white-space:nowrap;font-size:12px}
+.hw-presets{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px}
+.hw-presets .btn{padding:5px 9px}
+#hardware .workgrid{grid-template-columns:minmax(270px,0.76fr) minmax(0,1.8fr)}
+#hardware .kpi strong{font-size:clamp(17px,2vw,26px)}
+#hardware .field{align-content:start}
+#hardware .scroll td:last-child{white-space:normal;min-width:92px}
+#hardware .scroll td:first-child{white-space:normal;min-width:94px}
+#hardware .scroll td{font-variant-numeric:tabular-nums}
+#hardware .notice{margin-top:4px}
+#hardware .sectionhead h2{font-size:16px}
+.hw-topo{padding-bottom:12px}
+.hw-pipeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:2px 13px 10px}
+.hw-pipeline>div{position:relative;border:1px solid #4f4a83;background:#2b2c52;border-radius:7px;display:flex;flex-direction:column;gap:4px;padding:8px 6px;min-height:87px}
+.hw-pipeline>div:not(:last-child)::after{content:'';position:absolute;right:-9px;top:50%;width:8px;height:1px;background:#a79bfc}
+.hw-pipeline strong{font-size:11px}
+.hw-pipeline span,.hw-layers span{font-size:10px;color:#c3ccea}
+.hw-pipeline b{font-size:10px;color:#c6bbff;margin-top:auto}
+.hw-layers{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 13px}
+.hw-layers>div{border:1px solid #34395d;border-radius:6px;padding:6px 8px;display:grid;gap:2px}
+.hw-layers b{font-size:11px;color:#a8dfeb}
+.hw-rtt{padding:0 15px 10px}
+.hw-rttbar{display:flex;height:9px;gap:2px;overflow:hidden;border-radius:5px;background:#e8e9f3}
+.hw-rttkey{display:flex;flex-wrap:wrap;gap:4px 13px;margin-top:5px;color:var(--muted);font-size:11px}
+.hw-rttkey i{display:inline-block;width:7px;height:7px;border-radius:3px;margin-right:4px}
+.segment-0{background:#6d61df}.segment-1{background:#1a92a5}.segment-2{background:#a871bf}
+.hw-sim-controls{padding:0 15px 9px;display:flex;flex-wrap:wrap;gap:6px}
+.hw-sim-controls .btn{padding:5px 9px}
+.hw-sim-controls .btn:disabled{opacity:.55;cursor:default}
+.hw-formulas{padding:0 15px 10px}
+.hw-formulas details{border-top:1px solid var(--line);padding:7px 0}
+.hw-formulas details p{margin:5px 0;color:var(--muted);font-size:12px}
+@media(max-width:730px){
+  #hardware .workgrid{grid-template-columns:1fr}
+  .hw-docs{text-align:left}
+}
+@media(max-width:430px){
+  .hw-pipeline{grid-template-columns:1fr 1fr}
+  .hw-pipeline>div:not(:last-child)::after{display:none}
+}
+
+</style></head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><span class="mark" aria-hidden="true">✳</span><div>Fabric Lab<small>PCIe SCALE-UP</small></div></div>
+  <nav aria-label="工作区"><button data-page="analysis" aria-current="page"><span>▦</span>需求分析</button><button data-page="hardware"><span>▧</span>硬件规格与仿真</button><button data-page="compare"><span>◫</span>方案对比</button><button data-page="templates"><span>◇</span>拓扑模板</button><button data-page="evidence"><span>◎</span>验证记录</button><button data-page="history"><span>◴</span>历史版本</button></nav>
+  <div class="sidefoot"><span class="dot"></span> 当前浏览器保存 <small>可导入、导出 JSON 备份</small></div>
+</aside>
+<main>
+  <header class="top"><div><strong>工作区</strong><span class="slash">/</span><span id="breadcrumb">需求分析</span></div><div class="topactions"><button class="btn" id="import">导入</button><input type="file" accept="application/json,.json" id="file" hidden><button class="btn" id="export">↓ 导出</button></div></header>
+  <section id="analysis" class="page">
+    <div class="hero"><div><p class="eyebrow"><span class="dot"></span> SCALE-UP WORKBENCH</p><h1>PCIe 6.0 Scale-up 需求分析台</h1><p class="sub">从模型通信推导链路需求，定位多卡训练、推理与 Diffusion 的互联瓶颈。</p></div><button class="btn primary" id="save">＋ 保存版本</button></div>
+    <div class="scenario"><div class="selector"><label for="model">模型预设</label><select id="model"></select></div><div class="selector"><label for="scenario">运行场景</label><select id="scenario"></select></div><div class="selector"><label for="template">集群模板</label><select id="template"></select></div><span class="pill theory">理论推导</span></div>
+    <div id="kpis" class="kpis" aria-live="polite"></div>
+    <div class="workgrid">
+      <section class="card config"><div class="sectionhead"><div><h2>参数面板</h2><p>修改后实时计算</p></div><button id="reset" class="linkbtn">重置</button></div><form id="params"></form></section>
+      <div class="results">
+        <section class="card topo"><div class="sectionhead"><div><h2>交换拓扑</h2><p id="toponame"></p></div><span class="pill topology-pill" id="topogen"></span></div><div id="diagram"></div><p class="explain native-scope" id="native-scope" hidden></p><div class="legend" id="pcie-legend"><span><i></i> GPU 链路</span><span><i></i> 上联 / ISL</span><span><i></i> 热点链路</span></div></section>
+        <section class="card insight"><div class="sectionhead"><div><h2>瓶颈诊断</h2><p>以最热单向链路及输入预算为准</p></div></div><div id="warnings" aria-live="polite"></div></section>
+        <section class="card"><div class="sectionhead"><div><h2>通信流量</h2><p>Payload 口径 · 每卡发送 / 接收与全域注入</p></div><button id="show-formulas" class="linkbtn">公式说明 ↗</button></div><div id="traffic" class="scroll"></div></section>
+        <section class="card"><div class="sectionhead"><div><h2>端口与链路</h2><p>双向分开核算 · 按最热方向排序</p></div></div><div id="ports" class="scroll portscroll"></div></section>
+        <section class="card formulas" id="formulas"><div class="sectionhead"><div><h2>公式与计算口径</h2><p>理论模型 v1.2</p></div></div><div id="formula-body"></div></section>
+      </div>
+    </div>
+  </section>
+  <section id="hardware" class="page" hidden></section>
+  <section id="compare" class="page" hidden><div class="hero"><div><p class="eyebrow">COMPARISON</p><h1>方案对比</h1><p class="sub">选择同一比较维度，查看输入与瓶颈如何变化。</p></div></div><div class="card"><div class="sectionhead"><h2 id="compare-title">理论结果横向对比</h2></div><div class="viewtabs" id="compare-tabs"><button data-mode="model">模型</button><button data-mode="scenario">场景</button><button data-mode="cluster">PCIe 集群方案</button><button data-mode="native">厂商组网</button></div><div id="comparison" class="scroll"></div></div></section>
+  <section id="templates" class="page" hidden><div class="hero"><div><p class="eyebrow">TOPOLOGY LIBRARY</p><h1>拓扑模板</h1><p class="sub">查看厂商原始互联、端口配置和链路速率。</p></div><a class="btn" id="report-link" target="_blank" rel="noopener">查看来源报告 ↗</a></div><div class="topology-toolbar"><div class="viewtabs" id="template-tabs"><button data-library="native">厂商组网</button><button data-library="pcie">PCIe 服务器 / 架构</button></div><div class="template-filters" id="template-filters"><label class="field">规模<select id="cluster-size"><option value="all">全部规模</option><option value="8">8 卡</option><option value="72">72 卡</option><option value="1024">1024 卡</option></select></label><label class="field">厂商<select id="cluster-vendor"><option value="all">全部厂商</option><option>华为</option><option>阿里云</option><option>NVIDIA</option></select></label></div></div><div id="template-cards" class="templategrid"></div></section>
+  <section id="evidence" class="page" hidden><div class="hero"><div><p class="eyebrow">VALIDATION</p><h1>验证记录</h1><p class="sub">将 SimAI、Astra-sim 或实测结果绑定到参数快照。</p></div></div><div class="card"><div class="sectionhead"><div><h2>录入结果</h2><p id="binding">绑定当前参数与理论快照</p></div></div><form id="evidence-form" class="entryform"></form></div><div class="card stacked"><div class="sectionhead"><h2>证据对照</h2></div><div class="viewtabs" id="evidence-tabs"><button data-kind="all">全部</button><button data-kind="theory">理论推导</button><button data-kind="simulation">仿真</button><button data-kind="measured">实测</button></div><div id="evidence-list"></div></div></section>
+  <section id="history" class="page" hidden><div class="hero"><div><p class="eyebrow">VERSIONS</p><h1>历史版本</h1><p class="sub">恢复历史输入，或比较两个快照的参数和指标。</p></div><button class="btn primary" id="history-save">＋ 保存当前版本</button></div><div class="card"><div class="sectionhead"><h2>版本差异</h2></div><div id="version-diff"></div></div><div class="card stacked"><div class="sectionhead"><h2>已保存的版本</h2></div><div id="version-list"></div></div></section>
+</main>
+<dialog id="save-dialog"><form id="version-form"><h2>保存当前版本</h2><label>版本名称<input name="title" required maxlength="100"></label><label>结论 / 备注<textarea name="note" rows="3"></textarea></label><div class="dialog-actions"><button class="btn" type="button" id="cancel-save">取消</button><button class="btn primary">保存版本</button></div></form></dialog>
+<div id="toast" role="status" hidden></div>
+<script>
+'use strict';
+const modules = Object.create(null);
+modules['hardware-sizing.mjs'] = (() => {
+const sizes=[128,256,512,1024,2048,4096];
+const lanes=[1,2,4,8,16];
+const choices=(values,suffix='')=>values.map(value=>[value,value+suffix]);
+const hardwareFields=[
+  ['负载与事务',[
+    ['op','事务类型','read',[['read','Memory Read'],['write','Posted Memory Write']]],
+    ['payload','每笔应用传输 (B)',64,4,1048576,4],
+    ['target','每发起端口目标 Payload (GB/s)',128,.001,1e5,.001],
+    ['offset','起始地址 4 KiB 页内偏移 (B)',0,0,4092,4],
+    ['mrrs','MRRS (B)',4096,choices(sizes),'read'],
+    ['mps','MPS (B)',256,choices(sizes)],
+    ['rcb','RCB (B)',64,choices([64,128]),'read'],
+    ['cplSplit','Completion 策略','mps',[['mps','尽量用满 MPS'],['rcb','每个 RCB 分段']],'read'],
+    ['reqHeader','请求 TLP 开销 (B)',16,12,128,4],
+    ['cplHeader','Completion TLP 开销 (B)',12,12,128,4,'read'],
+    ['packing','FLIT TLP 区填充率 (%)',100,1,100,.1]
+  ],true],
+  ['链路与端口',[
+    ['rate','FLIT Mode 链路速率 (GT/s)',64,choices([16,32,64])],
+    ['reqPorts','活跃发起端口',1,1,32,1],
+    ['cplPorts','活跃响应端口',1,1,32,1],
+    ['reqLanes','发起端链宽',16,lanes.map(x=>[x,'x'+x])],
+    ['cplLanes','响应端链宽',16,lanes.map(x=>[x,'x'+x])],
+    ['switches','路径经过的 Switch 数',1,1,8,1],
+    ['islLanes','级联链宽',16,lanes.map(x=>[x,'x'+x]),'cascade'],
+    ['chipLanes','单颗 IP SerDes lanes',144,1,2048,1],
+    ['chipPorts','单颗 IP 逻辑端口',9,2,256,1]
+  ],true],
+  ['长度与延迟',[
+    ['reqMeters','发起端链路长度 (m)',.5,0,1000,.001],
+    ['cplMeters','响应端链路长度 (m)',.5,0,1000,.001],
+    ['islMeters','每段级联链路长度 (m)',.5,0,1000,.001,'cascade'],
+    ['nsMeter','单向传播延迟 (ns/m)',5,.001,1000,.001],
+    ['retimers','每段链路 Retimer 数',0,0,8,1],
+    ['retimerNs','每 Retimer 单向延迟 (ns)',10,0,10000,.01],
+    ['switchNs','单次 Switch 穿越 (ns)',60,0,100000,.01],
+    ['endpointNs','端点处理及其余延迟预算 (ns)',120,0,100000,.01],
+    ['rttMode','事务 RTT 口径','derived',[['derived','按链路和延迟推导'],['fixed','手动输入 / 实测 RTT']],'read'],
+    ['fixedRtt','手动事务 RTT (ns)',250,1,1e6,.01,'fixed'],
+    ['creditFixed','Credit 环路固定延迟 (ns)',180,1,1e6,.01],
+    ['ackFixed','ACK 环路固定延迟 (ns)',180,1,1e6,.01]
+  ],true],
+  ['Tag、Credit 与 Replay',[
+    ['functions','每发起端口的均分 Function 数',1,1,256,1,'read'],
+    ['tagBits','Tag 字段位宽',10,choices([5,8,10,14],' bit'),'read'],
+    ['tagBudget','每 Function 实际可用 Tag',768,1,16384,1,'read'],
+    ['trackMode','Switch 跟踪范围','transparent',[['transparent','透明转发 · 可选监控'],['proxy','代理发起 · IP 跟踪表']],'read'],
+    ['trackExtra','跟踪表附加字段 (bit/entry)',32,0,512,1,'read'],
+    ['requestLimit','每发起端口请求率上限 (MTLP/s，0=不限)',0,0,100000,.01],
+    ['cplLimit','每响应端口 Cpl 速率上限 (MTLP/s，0=不限)',0,0,100000,.01,'read'],
+    ['margin','资源裕量 (%)',20,0,400,.1],
+    ['headerCredits','每 VC 每类别 H 窗口 (0=自动)',0,0,65536,1],
+    ['dataCredits','每 VC 每类别 D 窗口 (0=自动)',0,0,1048576,1],
+    ['replayFlits','每端口 TX Replay 深度 (FLIT，0=自动)',0,0,1048576,1]
+  ],false],
+  ['交换数据面',[
+    ['clock','数据面频率 (MHz)',1000,1,20000,1],
+    ['util','内部有效利用率 (%)',85,1,100,.1],
+    ['channels','每端口每方向 IP 物理通道',1,1,32,1],
+    ['portWidth','每物理通道位宽 (bit，0=自动)',0,0,65536,32],
+    ['slices','Crossbar / Fabric 并行 Slice',9,1,256,1],
+    ['fabricWidth','每 Slice 位宽 (bit，0=自动)',0,0,65536,32],
+    ['vc','每端口 VC 数',2,1,8,1],
+    ['cell','内部 Cell 数据区 (B)',64,choices([64,128,256])],
+    ['meta','每 Cell 元数据 (B)',8,0,128,1],
+    ['fabricCreditNs','片内 Fabric 槽位返回 (ns)',40,1,1e6,.01],
+    ['egressCells','每出口每 VC 暂存 (Cell，0=自动)',0,0,1048576,1],
+    ['voqDepth','每活跃 VOQ 的 Cell 额度 (0=自动)',0,0,65536,1],
+    ['activeVoq','每入口支持活跃 VOQ 数',8,1,4096,1],
+    ['descriptor','每 VOQ Descriptor (B)',32,8,512,1],
+    ['poolKiB','每入口共享 Payload 池 (KiB，0=自动)',128,0,1048576,1],
+    ['burst','分析突发倍率',2,1,100,.1],
+    ['burstNs','分析突发窗口 (ns)',250,0,1e6,1],
+    ['sramFactor','SRAM ECC / 对齐附加 (%)',12.5,0,100,.1]
+  ],false],
+  ['仿真参数',[
+    ['simUs','仿真时长 (µs)',12,1,100,1],
+    ['simArrival','仿真发包节奏','steady',[['steady','均匀注入'],['burst','周期突发（用分析倍率 / 窗口）']]]
+  ],false]
+];
+const hardwareDefaults=Object.fromEntries(hardwareFields.flatMap(([,list])=>list.map(([id,,value])=>[id,value])));
+const hardwarePresets={
+  read64:{},
+  read4k:{payload:4096},
+  read4k512:{payload:4096,mrrs:512},
+  write64:{op:'write'},
+  fanIn:{reqPorts:8,target:25}
+};
+const tagMax={5:32,8:256,10:768,14:15360};
+const tagCeiling=bits=>tagMax[bits];
+const ceil=v=>Math.ceil(v-Math.min(1e-7,Math.abs(v)*1e-12));
+const round=(v,quantum)=>ceil(v/quantum)*quantum;
+const pow2=n=>n>0?2**Math.ceil(Math.log2(n)):0;
+const total=(items,f)=>items.reduce((a,b)=>a+f(b),0);
+const raw=(c,lanes)=>c.rate*lanes/8;
+const packet=(size,overhead,c)=>({size,tlp:size+overhead,credits:Math.ceil(size/16),cells:Math.ceil((size+overhead)/c.cell)});
+function splitTransfer(c){
+  const reqs=[];
+  const read=c.op==='read';
+  let addr=c.offset,left=c.payload;
+  while(left>0){
+    const size=Math.min(left,4096-addr%4096,read?c.mrrs:c.mps);
+    const req={size,addr,request:packet(read?0:size,c.reqHeader,c),completions:[]};
+    if(read){
+      let pos=addr,remaining=size;
+      while(remaining>0){
+        let n=Math.min(c.mps,remaining);
+        if(c.cplSplit==='rcb')n=Math.min(n,c.rcb-pos%c.rcb);
+        else if(n<remaining)n-=((pos+n)%c.rcb);
+        req.completions.push(packet(n,c.cplHeader,c));
+        pos+=n;remaining-=n;
+      }
+    }
+    reqs.push(req);addr+=size;left-=size;
+  }
+  return reqs;
+}
+function errorsFor(c){
+  const errors=[];
+  for(const [,list] of hardwareFields)for(const [key,label,,min,max,step] of list){
+    const value=c[key];
+    if(Array.isArray(min)?!min.some(([x])=>x===value):
+      (!Number.isFinite(value)||value<min||value>max||Math.abs((value-min)/step-Math.round((value-min)/step))>1e-5))errors.push(label+' 数值无效。');
+  }
+  if(c.op==='read'&&c.tagBudget>tagCeiling(c.tagBits))errors.push('有效 Tag 预算超过当前 Tag 模式的编码范围。');
+  return errors;
+}
+function sizeHardware(c){
+  const errors=errorsFor(c);
+  if(errors.length)return {errors};
+  const read=c.op==='read',reqs=splitTransfer(c);
+  const requests=reqs.map(r=>r.request),completions=reqs.flatMap(r=>r.completions);
+  const qBytes=total(requests,p=>p.tlp),aBytes=total(completions,p=>p.tlp);
+  const qCells=total(requests,p=>p.cells),aCells=total(completions,p=>p.cells);
+  const qCredits=total(requests,p=>p.credits),aCredits=total(completions,p=>p.credits);
+  const cellPhysical=c.cell+c.meta,packing=236/256*c.packing/100;
+  const links=[
+    {key:'req',name:'发起端链路',lanes:c.reqLanes,meters:c.reqMeters,ports:c.reqPorts,share:1},
+    {key:'cpl',name:'响应端链路',lanes:c.cplLanes,meters:c.cplMeters,ports:c.cplPorts,share:c.reqPorts/c.cplPorts}
+  ];
+  if(c.switches>1)links.push({key:'isl',name:'每段级联链路',lanes:c.islLanes,meters:c.islMeters,ports:1,share:c.reqPorts});
+  const oneWay=c.nsMeter*(c.reqMeters+c.cplMeters+(c.switches-1)*c.islMeters)+c.retimers*(c.switches+1)*c.retimerNs;
+  const stages=[['链路与 Retimer 往返',2*oneWay],['Switch 往返穿越',2*c.switches*c.switchNs],['端点及其余预算',c.endpointNs]];
+  const derivedRtt=total(stages,item=>item[1]),rtt=c.rttMode==='fixed'?c.fixedRtt:derivedRtt;
+  const safety=1+c.margin/100,cycle=c.clock/1000*c.util/100,ops=c.target/c.payload;
+  const protocol=Math.min(...links.map(l=>raw(c,l.lanes)*packing*c.payload/l.share/Math.max(qBytes,aBytes)));
+  const peakLinkCells=protocol/c.payload*Math.max(qCells,aCells)*cellPhysical*Math.max(...links.map(l=>l.share));
+  const nominalPortWidth=round(Math.max(peakLinkCells,...links.map(l=>raw(c,l.lanes)))*8/(cycle*c.channels),32);
+  const portWidth=c.portWidth||nominalPortWidth,portCapacity=portWidth*c.channels/8*cycle;
+  const chipRaw=raw(c,c.chipLanes);
+  const requiredFabric=Math.max(chipRaw,protocol/c.payload*(qCells+aCells)*cellPhysical*c.reqPorts);
+  const fabricWidth=c.fabricWidth||round(requiredFabric*safety*8/(cycle*c.slices),32);
+  const fabricCapacity=fabricWidth*c.slices/8*cycle;
+  const resources=links.map(l=>{
+    const line=raw(c,l.lanes),tlp=line*packing;
+    const linkDelay=l.meters*c.nsMeter+c.retimers*c.retimerNs;
+    const creditRtt=2*linkDelay+c.creditFixed,ackRtt=2*linkDelay+c.ackFixed;
+    const wireCeiling=c.payload/l.share*Math.min(tlp/qBytes,aBytes?tlp/aBytes:Infinity);
+    const portCeiling=c.payload/l.share*Math.min(portCapacity/(qCells*cellPhysical),aCells?portCapacity/(aCells*cellPhysical):Infinity);
+    const replayNeed=ceil(line*ackRtt/256*safety);
+    const replay=c.replayFlits||pow2(replayNeed);
+    const replayCeiling=wireCeiling*Math.min(1,replay*256/(line*ackRtt));
+    function direction(name,packets,bytes,cells,credits){
+      if(!packets.length)return null;
+      const freq=ops*l.share;
+      const maxD=Math.max(...packets.map(p=>p.credits));
+      const maxCells=Math.max(...packets.map(p=>p.cells));
+      const h= Math.max(1,ceil(freq*packets.length*creditRtt*safety/c.vc));
+      const d= Math.max(maxD,ceil(freq*credits*creditRtt*safety/c.vc));
+      const actualH=c.headerCredits||h,actualD=c.dataCredits||d;
+      const fcCeiling=c.payload/l.share/creditRtt*Math.min(actualH*c.vc/packets.length,credits?actualD*c.vc/credits:Infinity);
+      const cellRate=freq*cells,service=Math.min(tlp/bytes,portCapacity/(cells*cellPhysical))*cells;
+      const burstCells=ceil(Math.max(0,cellRate*c.burst-service)*c.burstNs);
+      return {name,h,d,actualH,actualD,fcCeiling,maxD,maxCells,burstCells,rate:freq*packets.length*1000,tlp:freq*bytes,cellRate};
+    }
+    const forward=direction(read?'NP / MemRd':'P / MemWr',requests,qBytes,qCells,qCredits);
+    const reverse=direction('Cpl / CplD',completions,aBytes,aCells,aCredits);
+    return {...l,line,tlp,linkDelay,creditRtt,ackRtt,wireCeiling,portCeiling,replayNeed,replay,replayCeiling,forward,reverse};
+  });
+  const inFlight=read?ceil(ops*reqs.length*rtt):null;
+  const ideal=read?ceil(ops*rtt):null;
+  const trackDepth=read?pow2(ceil(inFlight*safety)):null;
+  const trackBits=16+c.tagBits+13+Math.ceil(Math.log2(c.chipPorts))+c.trackExtra;
+  const tagPerFunction=read?ceil(inFlight/c.functions):null;
+  const tagCeilingBw=read?c.tagBudget*c.functions*c.payload/(reqs.length*rtt):Infinity;
+  const reqCeiling=c.requestLimit?c.requestLimit/1000*c.payload/reqs.length:Infinity;
+  const cplCeiling=read&&c.cplLimit?c.cplLimit/1000*c.payload/completions.length*c.cplPorts/c.reqPorts:Infinity;
+  const fabricPerOp=(qCells+aCells)*cellPhysical;
+  const ceilings=[
+    ['FLIT / TLP 与链路切割',Math.min(...resources.map(l=>l.wireCeiling))],
+    ['可用 Tag',tagCeilingBw],['发起端请求率',reqCeiling],['响应端 Completion 率',cplCeiling],
+    ['端口数据面',Math.min(...resources.map(l=>l.portCeiling))],
+    ['Fabric Cell 数据面',fabricCapacity*c.payload/(fabricPerOp*c.reqPorts)],
+    ['Credit 窗口',Math.min(...resources.flatMap(l=>[l.forward.fcCeiling,l.reverse?.fcCeiling??Infinity]))],
+    ['Replay 窗口',Math.min(...resources.map(l=>l.replayCeiling))]
+  ].sort((a,b)=>a[1]-b[1]);
+  const directions=resources.flatMap(l=>[l.forward,l.reverse].filter(Boolean));
+  const voqNeed=Math.max(...directions.map(d=>Math.max(d.maxCells,d.burstCells)));
+  const voqDepth=c.voqDepth||pow2(voqNeed);
+  const voqCount=c.chipPorts*(c.chipPorts-1)*3*c.vc;
+  const activeVoq=Math.min(c.activeVoq,voqCount/c.chipPorts);
+  const sramScale=1+c.sramFactor/100;
+  const voqBytes=c.chipPorts*activeVoq*voqDepth*c.descriptor*sramScale;
+  const poolBytes=(c.poolKiB?c.poolKiB*1024:activeVoq*voqDepth*cellPhysical)*sramScale;
+  const poolCells=Math.floor(poolBytes/(cellPhysical*sramScale));
+  const egressDepth=c.egressCells||pow2(voqNeed);
+  const fabricSlots=ceil(fabricCapacity/c.slices*c.fabricCreditNs/cellPhysical*safety);
+  const busyFabric=ops*fabricPerOp*c.reqPorts;
+  const warnings=[];
+  if(ceilings[0][1]<c.target-1e-6)warnings.push(['bad','目标 '+c.target+' GB/s/端口超过当前估算上限，首个约束为 '+ceilings[0][0]+'。']);
+  if(read&&tagPerFunction>c.tagBudget)warnings.push(['bad','实际 MemRd 并发需要 '+tagPerFunction+' Tag/Function，超过已配置的 '+c.tagBudget+'。']);
+  if(c.switches===1&&(c.reqPorts+c.cplPorts>c.chipPorts||c.reqPorts*c.reqLanes+c.cplPorts*c.cplLanes>c.chipLanes))warnings.push(['bad','活跃端口或 SerDes lanes 超出单颗 IP 配置。']);
+  if(c.chipPorts>c.chipLanes||16*c.chipPorts<c.chipLanes)warnings.push(['warn','逻辑端口与 lane 总量需核对合法的 PHY Bifurcation 组合。']);
+  if(c.replayFlits&&resources.some(l=>l.replay<l.replayNeed))warnings.push(['warn','已配置 Replay 深度小于至少一个端口的满线速窗口加裕量。']);
+  if(directions.some(d=>d.actualD<d.maxD))warnings.push(['bad','D Credit 小于至少一个 TLP 的数据需求。该队列中的大包无法发送。']);
+  if(c.activeVoq>activeVoq)warnings.push(['warn','活跃 VOQ 额度已按当前物理端口 / VC 组合封顶。']);
+  if(poolCells<voqNeed)warnings.push(['warn','单入口 Payload 池小于热点 VOQ 突发估算。']);
+  if(egressDepth<voqNeed)warnings.push(['warn','出口暂存小于突发估算。']);
+  if(voqDepth<voqNeed)warnings.push(['warn','已配置 VOQ 深度低于突发估算。请核对流量分布和共享池。']);
+  if(read&&c.rttMode==='fixed'&&c.fixedRtt<2*(oneWay+c.switches*c.switchNs))warnings.push(['warn','手动 RTT 小于链路与 Switch 往返之和。仿真仍会计入传播与穿越延迟。']);
+  return {read,reqs,requests,completions,resources,stages,derivedRtt,rtt,oneWay,packing,cellPhysical,ops,qBytes,aBytes,qCells,aCells,
+    inFlight,ideal,trackDepth,trackBits,tagPerFunction,portCapacity,portWidth,nominalPortWidth,fabricWidth,fabricCapacity,chipRaw,
+    ceilings,protocol,voqNeed,voqDepth,voqCount,activeVoq,voqBytes,poolBytes,poolCells,egressDepth,fabricSlots,busyFabric,warnings,
+    trackBytes:trackDepth*Math.ceil(trackBits/8)*sramScale, maxPayload:Math.max(...reqs.map(r=>r.size)),sramScale};
+}
+
+return { hardwareFields, hardwareDefaults, hardwarePresets, tagCeiling, splitTransfer, sizeHardware };
+})();
+modules['hardware-sim.mjs'] = (() => {
+const {sizeHardware} = modules['hardware-sizing.mjs'];
+
+class Events {
+  #items=[];
+  add(time,run){
+    const a=this.#items,item={time,run};
+    let i=a.length;
+    a.push(item);
+    while(i>0){
+      const parent=(i-1)>>1;
+      if(a[parent].time<=time)break;
+      a[i]=a[parent];i=parent;
+    }
+    a[i]=item;
+  }
+  next(){
+    const a=this.#items;
+    if(!a.length)return null;
+    const first=a[0],last=a.pop();
+    if(a.length){
+      let i=0;
+      for(let child=1;child<a.length;child=i*2+1){
+        if(child+1<a.length&&a[child+1].time<a[child].time)child++;
+        if(a[child].time>=last.time)break;
+        a[i]=a[child];i=child;
+      }
+      a[i]=last;
+    }
+    return first;
+  }
+}
+function fifo(){return {items:[],head:0}}
+function peek(q){return q.items[q.head]}
+function take(q){
+  const item=q.items[q.head++];
+  if(q.head===q.items.length){q.items=[];q.head=0}
+  return item;
+}
+function quantile(samples,p){
+  return samples.length?samples[Math.ceil(samples.length*p)-1]:null;
+}
+
+function simulateHardware(c,s=sizeHardware(c)){
+  if(s.errors)return {errors:s.errors};
+  const events=new Events();
+  const totalPackets=s.requests.length+s.completions.length;
+  const packetBudget=30000;
+  const intendedDuration=c.simUs*1000;
+  const period=c.simArrival==='burst'&&c.burstNs>0?c.burstNs*c.burst:0;
+  const offer=Math.min(s.ops,c.requestLimit?c.requestLimit/1000/s.requests.length:Infinity);
+  const cappedDuration=Math.min(intendedDuration,packetBudget/(offer*c.reqPorts*totalPackets*(period?c.burst:1)));
+  if(cappedDuration<1)return {errors:['当前报文组合超出浏览器仿真事件预算，请缩短传输或降低注入速率。']};
+  const warmup=cappedDuration*.2;
+  const stats={bytes:0,arrivals:0,issued:0,completed:0,tagStall:0,creditStall:0,queue:0,pool:0,egress:0,activeVoq:0,peakTags:0,events:0};
+  const samples=[];
+  const linkBy=Object.fromEntries(s.resources.map(l=>[l.key,l]));
+  const fabric=Array.from({length:c.switches},()=>({free:0,queue:new Map(),ingress:new Map()}));
+  const participants=Array.from({length:c.reqPorts},()=>({pending:fifo(),tags:0,waiting:false}));
+  const completerFree=new Float64Array(c.cplPorts);
+  const extraEndpoint=c.rttMode==='fixed'&&s.read?Math.max(0,s.rtt-2*(s.oneWay+c.switches*c.switchNs)):c.endpointNs;
+  const tagLimit=c.tagBudget*c.functions;
+  function pipe(link,reverse){
+    const spec=reverse?link.reverse:link.forward;
+    const effectiveWire=Math.min(link.line,link.replay*256/link.ackRtt)*s.packing;
+    return {link,spec,effectiveWire,queues:Array.from({length:c.vc},()=>({...fifo(),h:0,d:0,cells:0})),next:0,busy:false,waiting:false};
+  }
+  const pair=(link,count)=>Array.from({length:count},()=>[pipe(link,false),s.read?pipe(link,true):null]);
+  const req=pair(linkBy.req,c.reqPorts),cpl=pair(linkBy.cpl,c.cplPorts);
+  const isl=c.switches>1?pair(linkBy.isl,c.switches-1):[];
+  function drain(port,t){
+    if(port.busy)return;
+    let pending=false;
+    for(let offset=0;offset<c.vc;offset++){
+      const vc=(port.next+offset)%c.vc,q=port.queues[vc],task=peek(q);
+      if(!task)continue;
+      pending=true;
+      const {packet,done,launch}=task;
+      if(q.h>=port.spec.actualH||q.d+packet.credits>port.spec.actualD)continue;
+      take(q);q.cells-=packet.cells;q.h++;q.d+=packet.credits;
+      port.next=(vc+1)%c.vc;port.busy=true;port.waiting=false;
+      if(launch)launch(t);
+      const wireTime=packet.tlp/port.effectiveWire;
+      const portTime=packet.cells*s.cellPhysical/s.portCapacity;
+      const serialized=Math.max(wireTime,portTime);
+      events.add(t+serialized,now=>{port.busy=false;drain(port,now)});
+      events.add(t+Math.max(serialized,port.link.creditRtt),now=>{q.h--;q.d-=packet.credits;drain(port,now)});
+      events.add(t+serialized+port.link.linkDelay,done);
+      return;
+    }
+    if(pending&&!port.waiting){stats.creditStall++;port.waiting=true}
+  }
+  function enqueue(port,vc,packet,t,done,launch){
+    const q=port.queues[vc];
+    q.items.push({packet,done,launch});q.cells+=packet.cells;
+    drain(port,t);
+    stats.egress=Math.max(stats.egress,q.cells);
+  }
+  function crossbar(index,ingress,egress,vc,packet,t,done){
+    const sw=fabric[index],key=ingress+'>'+egress+':'+vc;
+    const bank=sw.ingress.get(ingress)??{cells:0,active:0};
+    sw.ingress.set(ingress,bank);
+    const before=sw.queue.get(key)??0,queued=before+packet.cells;
+    sw.queue.set(key,queued);bank.cells+=packet.cells;
+    if(!before)bank.active++;
+    const start=Math.max(t,sw.free),end=start+packet.cells*s.cellPhysical/s.fabricCapacity;
+    sw.free=end;
+    events.add(start,()=>{
+      const left=sw.queue.get(key)-packet.cells;
+      sw.queue.set(key,left);bank.cells-=packet.cells;
+      if(!left)bank.active--;
+    });
+    // An immediately granted packet uses the pipeline, not a waiting VOQ.
+    if(start>t){
+      stats.queue=Math.max(stats.queue,queued);
+      stats.pool=Math.max(stats.pool,bank.cells);
+      stats.activeVoq=Math.max(stats.activeVoq,bank.active);
+    }
+    events.add(end+c.switchNs,done);
+  }
+  function route(from,to,vc,packet,t,back,done,launch){
+    const segments=back?[cpl[to][1],...isl.map(p=>p[1]).reverse(),req[from][1]]:[req[from][0],...isl.map(p=>p[0]),cpl[to][0]];
+    const inId=back?'cpl'+to:'req'+from,outId=back?'req'+from:'cpl'+to;
+    function hop(i,now){
+      enqueue(segments[i],vc,packet,now,i===segments.length-1?done:arrived=>{
+        crossbar(back?c.switches-1-i:i,i===0?inId:'isl',i===segments.length-2?outId:'isl',vc,packet,arrived,next=>hop(i+1,next));
+      },i===0?launch:null);
+    }
+    hop(0,t);
+  }
+  function admit(from,t){
+    const state=participants[from];
+    while(peek(state.pending)){
+      if(s.read&&state.tags>=tagLimit){
+        if(!state.waiting)stats.tagStall++;
+        state.waiting=true;
+        return;
+      }
+      const {request,to,vc}=take(state.pending);
+      state.waiting=false;stats.issued++;
+      if(s.read){state.tags++;stats.peakTags=Math.max(stats.peakTags,state.tags)}
+      let first;
+      const finish=end=>{
+        stats.completed++;
+        if(end>=warmup&&end<=cappedDuration){
+          stats.bytes+=request.size;
+          samples.push(end-first);
+        }
+        if(s.read){state.tags--;admit(from,end)}
+      };
+      route(from,to,vc,request.request,t,false,arrive=>{
+        if(!s.read){finish(arrive);return}
+        let remaining=request.completions.length;
+        let sendAt=Math.max(arrive+extraEndpoint,completerFree[to]);
+        for(const response of request.completions){
+          const release=sendAt;
+          events.add(release,now=>route(from,to,vc,response,now,true,end=>{
+            if(--remaining===0)finish(end);
+          }));
+          if(c.cplLimit)sendAt+=1000/c.cplLimit;
+        }
+        completerFree[to]=sendAt;
+      },start=>{first=start});
+    }
+  }
+  const interval=1/offer;
+  function arrival(from,seq,t){
+    const to=(from+seq)%c.cplPorts,vc=Math.floor(seq/c.cplPorts)%c.vc;
+    stats.arrivals++;
+    for(const request of s.reqs)participants[from].pending.items.push({request,to,vc});
+    admit(from,t);
+    const clock=(seq+1+from/c.reqPorts)*interval;
+    const next=period?Math.floor(clock/period)*period+(clock%period)/c.burst:clock;
+    if(next<cappedDuration)events.add(next,now=>arrival(from,seq+1,now));
+  }
+  for(let i=0;i<c.reqPorts;i++)events.add(i*interval/c.reqPorts/(period?c.burst:1),now=>arrival(i,0,now));
+  for(let e=events.next();e&&e.time<=cappedDuration;e=events.next()){
+    stats.events++;e.run(e.time);
+  }
+  samples.sort((a,b)=>a-b);
+  return {stats,requestedDuration:intendedDuration,actualDuration:cappedDuration,shortened:cappedDuration<intendedDuration,
+    bw:stats.bytes/(cappedDuration-warmup)/c.reqPorts,sampleCount:samples.length,p50:quantile(samples,.5),p99:quantile(samples,.99),p999:quantile(samples,.999),
+    queuePass:stats.queue<=s.voqDepth&&stats.pool<=s.poolCells&&stats.activeVoq<=s.activeVoq&&stats.egress<=s.egressDepth};
+}
+
+return { simulateHardware };
+})();
+modules['hardware-page.mjs'] = (() => {
+const {hardwareDefaults,hardwareFields,hardwarePresets,sizeHardware,tagCeiling} = modules['hardware-sizing.mjs'];
+
+const {simulateHardware} = modules['hardware-sim.mjs'];
+
+const requirements='https://chatgpt.com/library?file_id=libfile_87caa173670481919c681a146a717c12&account_id=personal';
+const architecture='https://chatgpt.com/library?file_id=libfile_3b43d4458b108191bd7d39b9fd260db2&account_id=personal';
+const flit='https://pcisig.com/blog/evolution-pci-express-specification-its-sixth-generation-third-decade-and-still-going-strong';
+const rcb='https://docs.amd.com/r/en-US/pg054-7series-pcie/Read-Completion-Boundary';
+const tags='https://community.cadence.com/cadence_blogs_8/b/fv/posts/unravelling-pcie-6-0-flit-mode-challenges';
+const simai='https://github.com/aliyun/SimAI';
+const cocotb='https://github.com/alexforencich/cocotbext-pcie';
+const storageKey='pcie6-hardware-sizing-v1';
+const num=(v,d=2)=>v===null||v===undefined||!Number.isFinite(v)?'—':v.toLocaleString('zh-CN',{maximumFractionDigits:d});
+const bw=v=>num(v)+' GB/s';
+const kib=v=>num(v/1024)+' KiB';
+const esc=s=>String(s??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
+const href=(url,label)=>'<a href="'+url+'" target="_blank" rel="noopener noreferrer">'+label+' ↗</a>';
+const table=(headers,rows)=>'<div class="scroll"><table><thead><tr>'+headers.map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+const card=(title,sub,id)=>'<section class="card"><div class="sectionhead"><div><h2>'+title+'</h2><p>'+sub+'</p></div></div><div id="'+id+'"></div></section>';
+
+function markup(){
+  return '<div class="hero"><div><p class="eyebrow">PCIe 6.0 · HARDWARE SIZING</p><h1>Switch IP 硬件规格计算器</h1><p class="sub">从 Payload、事务和链路预算推导端口、数据面、队列与 SRAM 规格。</p></div><div class="hw-docs">'+href(requirements,'需求定义 §5–7')+href(architecture,'架构设计 §3–10')+'</div></div>'+
+    '<div class="hw-presets" aria-label="预设"><button class="btn" data-hw-preset="read64">64 B Read</button><button class="btn" data-hw-preset="read4k">4 KiB Read</button><button class="btn" data-hw-preset="read4k512">4 KiB · MRRS 512 B</button><button class="btn" data-hw-preset="write64">64 B Write</button><button class="btn" data-hw-preset="fanIn">8→1 Incast</button></div>'+
+    '<div class="kpis" id="hw-kpis" aria-live="polite"></div>'+
+    '<div class="workgrid"><section class="card config"><div class="sectionhead"><div><h2>设计输入</h2><p>GB/s 为十进制，容量以 KiB 表示</p></div></div><form id="hw-form"></form></section>'+
+    '<div class="results"><section class="card topo hw-topo"><div class="sectionhead"><div><h2>Switch IP 数据路径</h2><p>入口持有 Payload，出口授权拉取</p></div><span class="pill topology-pill">架构草案</span></div><div id="hw-arch"></div></section>'+
+    card('目标与可达性','各限制项按每发起端口折算','hw-limits')+
+    card('事务拆分与 RTT','MemRd / MemWr 与 CplD 分别计数','hw-tlp')+
+    card('端口与数据面规格','SerDes lane、IP 物理通道、Slice 分开计量','hw-spec')+
+    card('Credit、Replay 与缓存','每物理链路单向 · P / NP / Cpl 分账','hw-memory')+
+    '<section class="card"><div class="sectionhead"><div><h2>离散事件仿真</h2><p>运行当前配置，核对吞吐、Tag 停顿与队列峰值</p></div></div><div class="hw-sim-controls"><button class="btn primary" id="hw-run">运行当前配置</button><button class="btn" id="hw-bench">运行校验用例</button><button class="btn" id="hw-export">导出校准 JSON</button></div><div id="hw-sim" role="status" aria-live="polite"><p class="empty">选择运行后显示本页事件模型的结果。</p></div><p class="explain">事件模型按 TLP 串行化、路径传播、Tag、Credit 窗口、端口和 Fabric 服务率计算。Replay 按窗口限速，VOQ 峰值与容量比较。模型采用 Store-and-forward、FIFO Fabric 服务和理想 Credit 回收。逐跳序列化额外计入，所以仿真空载延迟可能高于输入 RTT 预算。Gen6 FLIT 细节、重放错误注入、Cut-through、Credit 级联反压、ordering 与死锁需在 RTL / BFM 层验证。</p></section>'+
+    '<section class="card formulas"><div class="sectionhead"><h2>公式、验证范围与来源</h2></div><div class="hw-formulas">'+
+      '<details open><summary>请求、Completion 与 Tag</summary><p>每笔应用传输先按 MRRS 或 MPS 以及 4 KiB 边界拆分。CplD 受 MPS 限制，内部切点与 RCB 对齐。选择每 RCB 分段可评估较高的 Completion 率。N = ⌈目标 GB/s × 每应用传输 MemRd 数 × RTT(ns) ÷ 应用传输 B⌉。Tag 在该 MemRd 最后一个 Completion 后释放。'+href(rcb,'AMD RCB 说明')+' · '+href(tags,'FLIT Mode Tag')+'</p></details>'+
+      '<details><summary>FLIT packing、链路上限与延迟</summary><p>FLIT Mode raw = GT/s × lanes ÷ 8。TLP 容量 = raw × 236/256 × 填充率。请求和响应分别限速，切割按发起/响应端口比和级联链路计。头部字段是可调字节假设。事务 RTT 预算含往返传播、Retimer、Switch 和端点余量。Credit / ACK 各按单条链路计算闭环。'+href(flit,'PCI-SIG FLIT 结构')+'</p></details>'+
+      '<details><summary>数据面、SRAM 与虚拟通道</summary><p>位宽按服务带宽 × 8 ÷ (频率 × 利用率 × 并行数) 向上取整到 32 bit。内部流量按每 TLP 独立切 Cell，并加元数据。外链 VC、P/NP/Cpl 类别、逻辑 VOQ 和 IP 物理数据通路各自计数。逻辑 VOQ 上限为 N×(N−1)×VC×3，Descriptor SRAM 按活跃队列额度预算，Payload 池按入口单独配置。Credit、Replay、事务跟踪和共享池的容量口径分别报告。</p></details>'+
+      '<details><summary>SimAI、事件模型与 RTL 验证</summary><p>用 '+href(simai,'SimAI / SimCCL')+' 生成集合通信或算子级流量，再按请求大小和方向映射成事务。当前页的离散事件结果用于校准带宽与延迟；导出 JSON 是校准数据，导入 SimAI 前需适配其网络模型和输入格式。'+href(cocotb,'cocotbext-pcie')+' 可用于 TLP、枚举、BAR 与设备交互的 BFM。Gen6 FLIT、VC / Credit、ACK/NAK Replay 需有对应能力的 RTL VIP 或自建模型。两份项目文档链接见页首。</p></details>'+
+    '</div></section></div></div>';
+}
+
+function fieldHtml([key,label,value,min,max,step,condition]){
+  if(Array.isArray(min)){
+    return '<label class="field" data-hw-show="'+(max??'all')+'"><span>'+label+'</span><select name="'+key+'">'+min.map(([v,l])=>'<option value="'+v+'"'+(v===value?' selected':'')+'>'+l+'</option>').join('')+'</select></label>';
+  }
+  return '<label class="field" data-hw-show="'+(condition??'all')+'"><span>'+label+'</span><input name="'+key+'" type="number" min="'+min+'" max="'+max+'" step="'+step+'" value="'+value+'"></label>';
+}
+
+function architectureView(c,r){
+  const stages=[
+    ['Port Macro','FLIT RX · PCS/FEC · DLL',num(c.chipLanes)+' lanes / '+num(c.chipPorts)+' ports'],
+    ['TLP Front End','路由 · 分区 · Ordering','P / NP / Cpl · '+num(c.vc)+' VC'],
+    ['Ingress Slice','Payload Store · Descriptor · VOQ',kib(r.poolBytes)+' / 入口'],
+    ['Scheduler / Fabric','出口申请 · 跨 Slice 读取',num(c.slices)+' × '+num(r.fabricWidth)+' bit'],
+    ['Egress Adapter','重组 TLP · FLIT TX · Replay',num(c.channels)+' × '+num(r.portWidth)+' bit / 方向']
+  ];
+  return '<div class="hw-pipeline">'+stages.map(([title,sub,tag])=>'<div><strong>'+title+'</strong><span>'+sub+'</span><b>'+tag+'</b></div>').join('')+'</div>'+
+    '<div class="hw-layers"><div><b>资源账本</b><span>Link Credit · Core 配额 · Fabric 传输槽，分别维护</span></div><div><b>旁路与控制</b><span>AI Service Tile（复制 / INC）· CSR · Telemetry · RAS</span></div></div>';
+}
+
+function tlpView(c,r){
+  const grouped=new Map();
+  for(const item of r.reqs){
+    const fragments=item.completions.map(p=>p.size);
+    const pattern=new Map();
+    for(const n of fragments)pattern.set(n,(pattern.get(n)??0)+1);
+    const desc=[...pattern].map(([n,count])=>count+' × '+n+' B').join(' + ')||'—';
+    const key=item.size+'/'+desc;
+    const row=grouped.get(key)??[item.size+' B',0,desc,item.completions.length];
+    row[1]++;grouped.set(key,row);
+  }
+  const shownStages=c.rttMode==='fixed'&&r.read?[['手动 / 实测 RTT',r.rtt]]:r.stages;
+  const chart=r.read?'<div class="hw-rtt"><div class="hw-rttbar" aria-hidden="true">'+shownStages.filter(([,v])=>v>0).map(([name,v],i)=>'<i class="segment-'+i+'" title="'+name+' '+num(v)+' ns" style="flex:'+v+'"></i>').join('')+'</div><div class="hw-rttkey">'+shownStages.map(([name,v],i)=>'<span><i class="segment-'+i+'"></i>'+name+' <b>'+num(v)+' ns</b></span>').join('')+'</div></div>':'';
+  const worst=r.read?Math.max(...r.reqs.map(q=>Math.ceil((q.addr%c.rcb+q.size)/c.rcb))):0;
+  return '<p class="explain">'+num(c.payload)+' B 应用传输 → '+num(r.reqs.length)+(r.read?' 个 MemRd → '+num(r.completions.length)+' 个 CplD':' 个 MemWr')+
+    ' · 每笔 TLP 字节 '+num(r.qBytes)+' B'+(r.read?' 请求 / '+num(r.aBytes)+' B 响应':'')+
+    (r.read?' · 每个 MemRd 按 RCB 的最多 CplD '+num(worst)+' 个':'')+'</p>'+chart+
+    table(['单请求 Payload','该类型请求数','Completion 分段','CplD / 请求'],[...grouped.values()].map(([n,count,desc,fragments])=>[n,num(count,0),desc,num(fragments,0)]));
+}
+
+function specView(c,r){
+  const rows=[
+    ['单颗 SerDes / 逻辑端口',num(c.chipLanes)+' lanes / '+num(c.chipPorts)+' ports','全端口单方向 raw '+bw(r.chipRaw)],
+    ['IP 端口物理通道',num(c.channels)+' 条 / 端口 / 方向','位宽 '+num(r.portWidth)+' bit；建议 '+num(r.nominalPortWidth)+' bit。全芯片 RX/TX 共 '+num(2*c.chipPorts*c.channels)+' 条'],
+    ['内部端口有效吞吐',bw(r.portCapacity),num(c.clock)+' MHz × '+num(c.util)+'% 利用率'],
+    ['Fabric / Crossbar',num(c.slices)+' Slice × '+num(r.fabricWidth)+' bit','有效 '+bw(r.fabricCapacity)+'；目标 Cell 流量 '+bw(r.busyFabric)+' / 每颗经过的 Switch'],
+    ['Cell / Metadata',num(c.cell)+' B + '+num(c.meta)+' B','每笔传输 '+num(r.qCells)+' 正向 Cell / '+num(r.aCells)+' 反向 Cell'],
+    ['外链 VC / 事务类',num(c.vc)+' VC / 端口','每 VC 的 P、NP、Cpl 分开计资源；物理通道由上方配置'],
+    ['片内 Fabric 槽位',num(r.fabricSlots)+' slots / Slice','按每 Slice 有效吞吐和 '+num(c.fabricCreditNs)+' ns 返回预算估算'],
+    ['出口暂存',num(r.egressDepth)+' Cell / VC',kib(r.egressDepth*c.vc*r.cellPhysical*r.sramScale)+' / 出口，含附加'],
+    ['逻辑 VOQ / 活跃额度',num(r.voqCount)+' 个逻辑索引','每入口 '+num(r.activeVoq)+' 个活跃队列，'+num(r.voqDepth)+' Cell / 队列'],
+    ['Descriptor SRAM',kib(r.voqBytes)+' / 芯片','活跃 VOQ × Cell 额度 × Descriptor 字节，含附加'],
+    ['入口 Payload Store',kib(r.poolBytes)+' / 入口','有效 '+num(r.poolCells)+' Cell / 入口；芯片合计 '+kib(r.poolBytes*c.chipPorts)],
+    ['头部解析峰值',num(Math.max(...r.resources.flatMap(l=>[l.forward.rate,l.reverse?.rate??0])))+' MTLP/s / 热点端口','按目标负载；每周期至少 '+num(Math.ceil(Math.max(...r.resources.flatMap(l=>[l.forward.rate,l.reverse?.rate??0]))/(c.clock*c.util/100)))+' 个解析槽']
+  ];
+  if(r.read){
+    rows.push(['Tag 预算与跟踪',num(r.tagPerFunction)+' Tag / Function','实际配置 '+num(c.tagBudget)+'；'+num(r.inFlight)+' MemRd / 发起端口，末个 CplD 释放']);
+    rows.push([c.trackMode==='proxy'?'IP 代理跟踪表':'可选 Read 监控表',num(r.trackDepth)+' entries × '+num(r.trackBits)+' bit','约 '+kib(r.trackBytes)+' / 发起端口，含按字节对齐与附加']);
+  }
+  return table(['资源','配置 / 推导','口径'],rows);
+}
+function memoryView(c,r){
+  const rows=r.resources.flatMap(l=>[l.forward,l.reverse].filter(Boolean).map(d=>[
+    l.name+' · '+d.name,'x'+l.lanes+' · '+bw(l.line),num(l.creditRtt)+' ns',num(d.h)+' / '+num(d.d),num(d.actualH)+' / '+num(d.actualD),
+    num(d.burstCells)+' Cell',num(l.ackRtt)+' ns',num(l.replayNeed)+' → '+num(l.replay)+' FLIT',kib(l.replay*256*r.sramScale)]));
+  return '<p class="explain">Credit 目标以每 VC 的均匀负载和裕量估算，H 为 TLP 头额度，D 为 16 B 单元。Replay 按每端口 TX 的满线速 ACK 窗口估算，SRAM 含附加。</p>'+
+    table(['链路 / 类别','单向 Raw','Credit RTT','目标 H / D','配置 H / D','突发积压估计','ACK RTT','Replay 需要 → 配置','Replay SRAM / TX'],rows);
+}
+
+function resultView(c,r,s){
+  if(s.errors)return s.errors.map(e=>'<p class="notice bad">'+esc(e)+'</p>').join('');
+  const band=s.bw/(Math.min(r.ceilings[0][1],c.target));
+  const modelPass=band>=.9&&s.queuePass;
+  const meetsTarget=r.ceilings[0][1]>=c.target-1e-6&&s.bw>=c.target*.95;
+  const status=s.sampleCount===0?'无完成样本':!modelPass?'检查吞吐 / 队列约束':meetsTarget?'达到目标预算':'接近模型上限，目标带宽受限';
+  return '<p class="notice '+(modelPass&&meetsTarget?'good':'warn')+'">'+status+' · 仿真 '+bw(s.bw)+' / 发起端口 · 理论上限 '+bw(r.ceilings[0][1])+'</p>'+
+    table(['样本与延迟','停顿 / 在途','队列观测 / 配置'],[[
+      num(s.sampleCount)+' 样本 · P50 / P99 / P999 '+[s.p50,s.p99,s.p999].map(x=>num(x)).join(' / ')+' ns',
+      'Tag '+num(s.stats.tagStall)+' 次 · Credit '+num(s.stats.creditStall)+' 次 · 峰值 '+num(s.stats.peakTags)+' Tags / 端口',
+      'VOQ '+num(s.stats.queue)+' / '+num(r.voqDepth)+' Cell · 入口池 '+num(s.stats.pool)+' / '+num(r.poolCells)+' Cell'
+    ],['测量窗口 '+num(s.actualDuration/1000)+' µs，前 20% 预热','活跃 VOQ '+num(s.stats.activeVoq)+' / '+num(r.activeVoq)+' 每入口','Egress 暂存队列峰值 '+num(s.stats.egress)+' / '+num(r.egressDepth)+' Cell / VC']])+
+    (s.shortened?'<p class="explain">为控制事件数，实际仿真时长已缩短。</p>':'');
+}
+
+function runBench(){
+  const cases=[
+    {name:'64 B · 基线',diff:{},check:(r,s)=>r.inFlight===500&&s.bw>.95*r.protocol},
+    {name:'4 KiB · MRRS 4 KiB',diff:{payload:4096},check:(r,s)=>r.inFlight===8&&r.completions.length===16&&s.bw>.95*r.protocol},
+    {name:'4 KiB · MRRS 512 B',diff:{payload:4096,mrrs:512},check:(r,s)=>r.inFlight===63&&r.completions.length===16&&s.bw>.95*r.protocol},
+    {name:'64 B · 限制 32 Tags',diff:{tagBits:5,tagBudget:32},check:(r,s)=>s.stats.tagStall>0&&s.bw<r.protocol*.2},
+    {name:'64 B · H Credit = 1',diff:{headerCredits:1},check:(r,s)=>s.stats.creditStall>0&&s.bw<r.protocol*.2},
+    {name:'64 B · 256-bit 端口',diff:{portWidth:256},check:(r,s)=>r.ceilings[0][0]==='端口数据面'&&s.bw<r.protocol*.2},
+    {name:'8→1 · 1 Cell 出口暂存',diff:{reqPorts:8,target:25,egressCells:1},check:(r,s)=>!s.queuePass&&s.stats.egress>r.egressDepth}
+  ];
+  return cases.map(({name,diff,check})=>{
+    const c={...hardwareDefaults,...diff},r=sizeHardware(c),s=simulateHardware(c,r);
+    return [name,num(r.inFlight),num(r.completions.length),bw(s.bw),num(s.p99)+' ns',check(r,s)?'<strong class="good">通过</strong>':'<strong class="bad">需核对</strong>'];
+  });
+}
+
+function mountHardware(page){
+  page.innerHTML=markup();
+  const get=id=>page.querySelector('#'+id);
+  const form=get('hw-form');
+  form.innerHTML=hardwareFields.map(([title,fields,open])=>'<details '+(open?'open':'')+'><summary>'+title+'</summary><div class="fields">'+fields.map(fieldHtml).join('')+'</div></details>').join('');
+  let c={...hardwareDefaults},r,simulation=null,frame;
+  try{
+    const prior=JSON.parse(localStorage.getItem(storageKey));
+    for(const key of Object.keys(hardwareDefaults))if(prior&&typeof prior[key]===typeof c[key])c[key]=prior[key];
+  }catch{}
+  const controls=[...form.elements];
+  function sync(){
+    for(const e of controls)e.value=c[e.name]??'';
+    for(const label of form.querySelectorAll('[data-hw-show]')){
+      const mode=label.dataset.hwShow;
+      label.hidden=mode==='read'?c.op!=='read':mode==='cascade'?c.switches===1:mode==='fixed'?c.op!=='read'||c.rttMode!=='fixed':false;
+    }
+  }
+  function render(){
+    simulation=null;r=sizeHardware(c);
+    const kpi=(label,value,detail)=>'<div class="kpi"><div class="label">'+label+'</div><strong>'+value+'</strong><div class="detail">'+detail+'</div></div>';
+    get('hw-sim').innerHTML='<p class="empty">选择运行后显示当前参数的事件模型结果。</p>';
+    for(const id of ['hw-run','hw-export'])get(id).disabled=!!r.errors;
+    if(r.errors){
+      get('hw-kpis').innerHTML=kpi('等待参数修正','—','')+r.errors.map(e=>'<p class="notice bad">'+esc(e)+'</p>').join('');
+      for(const id of ['hw-arch','hw-limits','hw-tlp','hw-spec','hw-memory'])get(id).innerHTML='';
+      return;
+    }
+    get('hw-kpis').innerHTML=
+      kpi('发起端单向 Raw',bw(r.resources[0].line),'x'+c.reqLanes+' @ '+c.rate+' GT/s')+
+      kpi('协议 Payload 上限',bw(r.protocol),'每发起端口 · 计 FLIT / TLP')+
+      kpi('实际 MemRd 在途',r.read?num(r.inFlight)+' 条':'—',r.read?'按 '+num(r.rtt)+' ns · 不拆包理想值 '+num(r.ideal):'Posted Write')+
+      kpi('估算可达 Payload',bw(Math.min(c.target,r.ceilings[0][1])),r.ceilings[0][1]<c.target?'限制项 · '+r.ceilings[0][0]:'目标带宽在当前预算内');
+    get('hw-arch').innerHTML=architectureView(c,r);
+    get('hw-limits').innerHTML=r.warnings.map(([level,e])=>'<p class="notice '+level+'">'+esc(e)+'</p>').join('')+
+      table(['限制项','每发起端口 Payload 上限'],r.ceilings.filter(x=>Number.isFinite(x[1])).map(([label,v])=>[label,bw(v)]));
+    get('hw-tlp').innerHTML=tlpView(c,r);
+    get('hw-spec').innerHTML=specView(c,r);
+    get('hw-memory').innerHTML=memoryView(c,r);
+  }
+  function update(){
+    try{localStorage.setItem(storageKey,JSON.stringify(c))}catch{}
+    sync();render();
+  }
+  page.addEventListener('click',e=>{
+    const key=e.target.closest('[data-hw-preset]')?.dataset.hwPreset;
+    if(key){c={...hardwareDefaults,...hardwarePresets[key]};update()}
+  });
+  form.addEventListener('submit',e=>e.preventDefault());
+  form.addEventListener('input',e=>{
+    const input=e.target,key=input.name;
+    if(!(key in hardwareDefaults))return;
+    c[key]=typeof hardwareDefaults[key]==='number'?(input.value===''?null:Number(input.value)):input.value;
+    if(key==='tagBits'){c.tagBudget=Math.min(c.tagBudget??tagCeiling(c.tagBits),tagCeiling(c.tagBits));form.elements.tagBudget.value=c.tagBudget}
+    for(const label of form.querySelectorAll('[data-hw-show="read"]'))label.hidden=c.op!=='read';
+    for(const label of form.querySelectorAll('[data-hw-show="cascade"]'))label.hidden=c.switches===1;
+    form.elements.fixedRtt.closest('label').hidden=c.op!=='read'||c.rttMode!=='fixed';
+    try{localStorage.setItem(storageKey,JSON.stringify(c))}catch{}
+    cancelAnimationFrame(frame);frame=requestAnimationFrame(render);
+  });
+  function run(label,task){
+    const buttons=[get('hw-run'),get('hw-bench')];
+    buttons.forEach(b=>b.disabled=true);
+    get('hw-sim').innerHTML='<p class="empty">'+label+'…</p>';
+    requestAnimationFrame(()=>setTimeout(()=>{
+      try{task()}catch(error){get('hw-sim').innerHTML='<p class="notice bad">'+esc(error.message)+'</p>'}
+      finally{buttons[0].disabled=!!r.errors;buttons[1].disabled=false}
+    },0));
+  }
+  get('hw-run').onclick=()=>run('仿真运行中',()=>{simulation=simulateHardware(c,r);get('hw-sim').innerHTML=resultView(c,r,simulation)});
+  get('hw-bench').onclick=()=>run('校验运行中',()=>{
+    get('hw-sim').innerHTML='<p class="explain">吞吐按 64 B / 4 KiB 协议上限核对，Tag / Credit 压力用例检查停顿与降速。</p>'+
+      table(['校验用例','在途 MemRd','CplD / 应用传输','仿真 GB/s / 端口','P99','核对结果'],runBench());
+  });
+  get('hw-export').onclick=()=>{
+    if(r.errors)return;
+    const calibration={format:'pcie6-hardware-calibration-v1',inputs:c,readRttNs:r.read?r.rtt:null,
+      memRequests:r.reqs.map(q=>({payloadBytes:q.size,cplPayloadBytes:q.completions.map(p=>p.size)})),
+      protocolPayloadGBpsPerRequester:r.protocol,estimatedPayloadGBpsPerRequester:Math.min(c.target,r.ceilings[0][1]),
+      switchSpec:{portChannels:c.channels,portWidthBits:r.portWidth,fabricSlices:c.slices,fabricWidthBits:r.fabricWidth,
+        clockMHz:c.clock,vcPerPort:c.vc,logicalVoq:r.voqCount,activeVoqPerIngress:r.activeVoq,voqDepthCells:r.voqDepth,
+        ingressPoolCells:r.poolCells,egressCellsPerVc:r.egressDepth,fabricSlotsPerSlice:r.fabricSlots,
+        trackingEntriesPerRequester:r.read?r.trackDepth:null,links:r.resources.map(l=>({name:l.name,rawGBps:l.line,
+          creditRttNs:l.creditRtt,ackRttNs:l.ackRtt,replayFlits:l.replay,forward:{H:l.forward.actualH,D:l.forward.actualD},
+          reverse:l.reverse?{H:l.reverse.actualH,D:l.reverse.actualD}:null}))},
+      sim:simulation?.errors?null:simulation,notes:'Calibrate a workload-level network model with payload capacity and same-measurement-point latency.'};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(calibration,null,2)],{type:'application/json'}));
+    const a=document.createElement('a');a.href=url;a.download='pcie6-hardware-calibration.json';a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  sync();render();
+}
+
+return { mountHardware };
+})();
+modules['data.mjs'] = (() => {
+const report = 'https://chatgpt.com/library?file_id=libfile_c751c3c181408191ae61337809e01788&account_id=personal';
+const sources = {
+  pcie: 'https://pcisig.com/faq?field_category_value%5B%5D=pci_express_6.0&keys=PAM4',
+  multicast: 'https://pcisig.com/PCIExpress/ECN/Base/Multicast',
+  nccl: 'https://github.com/NVIDIA/nccl-tests/blob/master/doc/PERFORMANCE.md',
+  kimi: 'https://www.kimi.com/en/help/kimi-code/models',
+  deepseek: 'https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/main/config.json',
+  deepseekModel: 'https://www.deepseek.com/en/news/deepseek-v4-1-flash/',
+  simai: 'https://github.com/aliyun/SimAI',
+  astra: 'https://github.com/astra-sim/astra-sim'
+};
+const modelPresets = {
+  kimi: {label:'KIMI K3', params:2800, hidden:8192, layers:64, moeLayers:56, experts:896, topK:8, prefillLayers:0, modelNote:'2.8T 来自 Kimi 官方；结构参数与精度为可编辑的工程假设。'},
+  deepseek: {label:'DeepSeek V4.1 Flash-1017', params:552, hidden:5120, layers:40, moeLayers:40, experts:384, topK:6, prefillLayers:20, modelNote:'552B backbone 与 text config 取自官方资料。Prefill 按 20 层建模，Decode 按 40 层。KV 压缩、Engram、视觉塔与精度按部署另行校准。'},
+  v4flash: {label:'DeepSeek V4.0 Flash · 284B', params:284, hidden:4096, layers:43, moeLayers:43, experts:256, topK:6, prefillLayers:0,
+    url:'https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash', configUrl:'https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/main/inference/config.json', modelNote:'43 层、256 个 routed experts、Top-6。通信按均匀路由估算，Hash routing、MLA 压缩和 FP4/FP8 传输字节数需按部署校准。'},
+  qwenImage: {label:'Qwen-Image-2512', params:20, hidden:3072, layers:60, moeLayers:0, experts:1, topK:1, prefillLayers:0, diffusion:true,
+    url:'https://github.com/QwenLM/Qwen-Image', configUrl:'https://huggingface.co/Qwen/Qwen-Image-2512/blob/main/transformer/config.json', modelNote:'按约 20B MMDiT 主干估算，内部宽度 = 24×128。图像与文本 Token 可合并输入，文本编码器与 VAE 另行计量。'},
+  minimaxH3: {label:'MiniMax-H3', params:33, hidden:5376, layers:50, moeLayers:0, experts:1, topK:1, prefillLayers:0, diffusion:true,
+    url:'https://www.minimax.io/news/minimax-h3-open-source', configUrl:'https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/transformer/config.json', modelNote:'按 33B H3-Omni Transformer 主干估算，50 个主层。音视频 Token 可合并输入。Refiner、VAE、文本编码器及 AdaLN 预计算/缓存另行校准。'},
+  qwen38: {label:'Qwen3.8-27B', params:27, hidden:5120, layers:64, moeLayers:0, experts:1, topK:1, prefillLayers:0,
+    url:'https://huggingface.co/Qwen/Qwen3.8-27B', configUrl:'https://huggingface.co/Qwen/Qwen3.8-27B/blob/main/config.json', modelNote:'按 64 层 dense text backbone 估算。混合 Attention 的状态与视觉塔需按部署另计。'},
+  ming: {label:'Ming-3.0-audio-flash', params:126, hidden:2560, layers:42, moeLayers:40, experts:512, topK:8, prefillLayers:0,
+    url:'https://huggingface.co/inclusionAI/Ming-3.0-audio-flash', configUrl:'https://huggingface.co/inclusionAI/Ming-3.0-audio-flash/blob/main/config.json', modelNote:'模型卡为 126B；通信使用 42 层 text backbone，前 2 层 dense。输入吞吐含进入主干的音频与文本 Token，音频编码器和 Talker 通信另计。'},
+  custom: {label:'自定义模型'}
+};
+const scenarioLabels = {decode:'推理 · Decode',prefill:'推理 · Prefill',train:'训练 · Train',diffusion:'推理 · Diffusion'};
+const scenarioDefaults = {
+  decode:{batch:128,seq:8192,tps:32000,kvPct:0,weightWindow:0,sp:1},
+  prefill:{batch:16,seq:8192,tps:180000,kvPct:100,weightWindow:0,sp:1},
+  train:{batch:128,seq:8192,tps:60000,kvPct:0,weightWindow:0,sp:1},
+  diffusion:{batch:4,seq:4096,tps:1,kvPct:0,weightWindow:0,sp:1}
+};
+const hpe = 'https://www.hpe.com/uk/en/collaterals/collateral.a50014668enw.html';
+const dell = 'https://www.dell.com/support/product-details/en-us/product/poweredge-xe7745/resources/manuals';
+const asus = 'https://dlcdnets.asus.com/pub/ASUS/server/ESC8000A-E13P/Manual/E26262_ESC8000A-E13_Series_UM_V3_WEB.pdf?model=ESC8000A-E13P';
+const lenovo = 'https://lenovopress.lenovo.com/lp1611-thinksystem-sr675-v3-server';
+const tpl = (id,name,gpus,groups,topology,gen,lane,upCount,perHost,detail,io,source,level,extra={}) => ({
+  id,name,detail,io,source,level, config:{gpus,groups,topology,gen,lane,upCount,perHost,upGen:gen,upLane:16,islGen:gen,islLane:16,islCount:1,spines:2,hostBridge:0,hostStaging:false,...extra}
+});
+const templates = [
+  tpl('baseline','Gen6 8 卡单层扇出',8,1,'star',6,16,1,1,'1×x16 CPU 上联，8×x16 GPU 下联。','共 9 个 x16 端口，144 lanes。',sources.pcie,'架构评估基线'),
+  ...[
+    ['P96669-B21','6 个扩展槽；8×EDSFF，CPU Direct Attach。'],
+    ['P96672-B21','8 个扩展槽；8×EDSFF，走 Switch。'],
+    ['P96675-B21','7 个扩展槽；1×RAID/HBA，8×EDSFF。'],
+    ['P96678-B21','6 个扩展槽；2×RAID/HBA，16×EDSFF。']
+  ].map(([sku,io])=>tpl(sku,'HPE DL585a · '+sku,8,2,'split',6,16,2,1,'双 CPU，各接 1 颗 Switch。每 Switch 2×Gen6 x16 上联、4×Gen6 x16 GPU 槽。',io+' 跨域经 CPU / xGMI（需核实）。',hpe,'QuickSpecs / SKU 引图')),
+  tpl('dell','Dell XE7745 · 8 GPU',8,4,'split',5,16,1,2,'4×PEX89144（文章引图），每颗连 2 GPU、1×x16 CPU 上联。','图示 NIC Gen5 x16、NVMe Gen4 x4；独立 NVLink 路径不计入。',dell,'特定配置 / 文章引图'),
+  tpl('xfusion','xFusion G8550 V8 · Mesh',16,4,'mesh',5,16,0,2,'4 颗 Switch、每颗 4 GPU，按文章图建模 Switch 全互连。','图示每组 1 NIC。ISL x16 与 GPU x16 是分析初值；图未给 CPU 上联，默认 0。','https://www.xfusion.com/en/product/ai-servers/fusionserver-g8550-v8-ai','文章引图 / 端口待核实'),
+  tpl('gigabyte','GIGABYTE G493-ZB4-AAP1',8,2,'split',5,16,2,1,'双 PEX89144，各 2×Gen5 x16 CPU 上联、4×Gen5 x16 GPU 下联。','CPU 间 4×xGMI3 32GT/s；扩展槽和 SSD 路径见手册。','https://download.gigabyte.com/FileList/Manual/server_manual_e_G493-ZB4_v1.0.pdf','官方系统框图'),
+  tpl('asus','ASUS ESC8000A-E13P',8,2,'split',5,16,1,1,'双 Switch，各带 4 GPU。GPU x16 与单 x16 上联作为可调初值。','CPU 间 4×GMI；NVMe 有 Gen5 x8 Switch 分支，另有 CPU 直连 NIC / BF3。',asus,'官方手册 / 上联待核实'),
+  tpl('asus-direct','ASUS ESC8000A-E13 · Direct',8,2,'direct',5,16,0,1,'双 CPU 各直连 4 GPU，GPU x16 为可调初值。','CPU 间 3×GMI；各有直连 NIC。',asus,'官方手册 / 链宽待核实'),
+  tpl('br7s','Lenovo SR675 V3 · BR7S',8,2,'split',5,16,2,1,'8×Gen5 x16 GPU，下联带宽约为 CPU 侧的 2 倍。','建模为每 4 GPU 共享 2×x16 上联；具体布线见 Riser 章节。',lenovo,'官方 Product Guide / 路径抽象'),
+  tpl('br7r','Lenovo SR675 V3 · BR7R',8,2,'direct',5,8,0,1,'8×Gen5 x8 GPU 直连，1:1。','按双 CPU 对称分组建模。',lenovo,'官方 Product Guide'),
+  tpl('br7q','Lenovo SR675 V3 · BR7Q',4,2,'direct',5,16,0,1,'4×Gen5 x16 GPU 直连，1:1。','按双 CPU 对称分组建模。',lenovo,'官方 Product Guide'),
+  tpl('xe9785l','Dell XE9785L · PSBB',8,4,'split',5,16,1,2,'文章引图为 PSBB 上 4×PEX89144 与 GPU UBB。','8 GPU、x16 与上联映射是分析抽象，需按具体 UBB 核验。',report,'文章引图 / 端口待核实'),
+  tpl('ring','Gen6 16 卡 Switch Ring',16,4,'ring',6,16,1,1,'4 个交换域，各 4 GPU；相邻 Switch 用可配置 ISL 连接。','用于评估环形路径的热点与跳数。',sources.pcie,'架构评估基线'),
+  tpl('clos','Gen6 32 卡两级 Clos',32,4,'clos',6,16,1,1,'4 Leaf × 8 GPU，2 Spine，Leaf–Spine 链路可调。','使用等长最短路径流级分摊。',sources.pcie,'架构评估基线')
+];
+const topologyNames = {star:'单层扇出',split:'分离交换域',mesh:'全互连 Mesh',ring:'Switch Ring',clos:'两级 Clos',direct:'CPU 直连'};
+const defaults = {
+  model:'kimi',scenario:'decode',template:'baseline',...modelPresets.kimi,...scenarioDefaults.decode,...templates[0].config,
+  denoiseSteps:40,cfgPasses:2,nativeEndpointBW:0,nativeUplinkBW:0,nativeEthernet:200,
+  tp:2,ep:4,dp:4,pp:1,act:2,weight:1,gradient:2,expertShare:90,tpOps:2,alltoall:0,kvBytes:1024,kvMoves:0,
+  kvMode:'peer',skew:1.3,eff:82,creditRTT:.25,baseHop:.15,packet:4096,burstFactor:2,burstWindow:5,
+  buffer:256,p99Budget:10,p999Budget:20,switchPorts:9,switchLanes:144,placement:'tp',expertGrad:'replicated'
+};
+const fields = [
+  ['模型参数',true,[
+    ['params','总参数量 (B)',.001,100000,.001],['hidden','Hidden Size',1,1048576,1],['layers','Transformer 层数',1,1024,1],['moeLayers','MoE 层数',0,1024,1],
+    ['experts','每层专家数',1,16384,1],['topK','Top-K 专家',1,16384,1],['prefillLayers','Prefill 活跃层数 (0=全部)',0,1024,1]
+  ],'model'],
+  ['并行策略',true,[
+    ['tp','TP',1,1024,1],['ep','EP',1,1024,1],['dp','DP',1,1024,1],['pp','PP',1,1024,1],['sp','SP',1,1024,1],['gpus','GPU 数',1,1024,1],
+    ['placement','Rank 放置',{tp:'TP 优先连续',ep:'DP / EP 优先连续'}],['expertGrad','专家梯度归并',{replicated:'仅跨专家副本',dense:'全部按 DP 归并（敏感性）'}]
+  ],'GPU = TP × DP × PP；EP 划分 DP 组，SP 在 TP 组内。'],
+  ['工作负载',true,[
+    ['batch','全局 Batch Size',1,1e7,1],['seq','Seq Length',1,1e7,1],['tps','全域 Token/s',.001,1e10,.001],['denoiseSteps','Denoising Steps',1,10000,1],['cfgPasses','每步 Denoiser Passes',1,16,1],['act','Activation Bytes',.25,16,.25],
+    ['weight','Weight Bytes',.125,16,.125],['gradient','Gradient Bytes',.25,16,.25],['expertShare','专家参数占比 (%)',0,100,.1],['tpOps','TP Collective / 层（前向）',0,64,1],
+    ['alltoall','每层额外 TP All2All 次数',0,64,1],['skew','MoE 热点权重',1,32,.01],
+    ['weightWindow','权重加载窗口 (s)',0,1e8,.01],['kvPct','需同步 KV Token (%)',0,100,.1],['kvBytes','KV Bytes / Token / 层',1,1e9,1],['kvMoves','完整 KV 迁移 (序列/s)',0,1e9,.001],['kvMode','KV 同步目标',{peer:'下一个 Rank',host:'本地 CPU'}]
+  ],'Decode 每序列每步 1 token。Prefill / Train 每步为 Batch × Seq。权重窗口 0 表示关闭。完整 KV 迁移按 Seq Length 计算。'],
+  ['链路与拓扑',false,[
+    ['topology','拓扑形态',topologyNames],['groups','GPU 分组 / Leaf 数',1,128,1],['gen','GPU 链路 Gen',{5:'Gen5',6:'Gen6'}],['lane','GPU 链宽',{4:'x4',8:'x8',16:'x16'}],
+    ['upCount','CPU 上联 / Switch',0,16,1],['perHost','每 CPU 的 Switch / 分组数',1,32,1],['upGen','CPU 上联 Gen',{5:'Gen5',6:'Gen6'}],['upLane','CPU 上联链宽',{4:'x4',8:'x8',16:'x16'}],
+    ['islCount','并行 ISL / 邻接',1,16,1],['spines','Clos Spine 数',1,8,1],['islGen','ISL Gen',{5:'Gen5',6:'Gen6'}],['islLane','ISL 链宽',{4:'x4',8:'x8',16:'x16'}],
+    ['switchPorts','单 Switch 端口预算',1,256,1],['switchLanes','单 Switch Lane 预算',1,4096,1],
+    ['hostBridge','CPU 间可用带宽 (GB/s)',0,1e6,.01],['hostStaging','允许经 CPU 中转','check']
+  ],'相同邻接的并行物理链路按均分核算。中转能力与带宽需另行验证。','pcie'],
+  ['原生链路参数',false,[
+    ['nativeEthernet','DGX H100 Ethernet 单口速率',{100:'100GbE',200:'200GbE',400:'400GbE'}],
+    ['nativeEndpointBW','机内互联 / NPU–L1 单向 (Gb/s)',0,1e7,.01],['nativeUplinkBW','UB L1–L2 单口单向 (Gb/s)',0,1e7,.01]
+  ],'未标定端口设为 0。流量仍按拓扑路由，利用率与延迟只基于已标定链路。','native'],
+  ['Buffer 与时延',false,[
+    ['eff','Payload 效率 (%)',1,100,.1],
+    ['buffer','每方向 Egress Buffer (KiB)',0,1e7,.01],['creditRTT','Credit RTT (µs)',0,1e6,.001],['baseHop','每物理跳固定延迟 (µs)',0,1e6,.001],['packet','有效服务单元 (B)',1,1e9,1],
+    ['burstFactor','突发倍率',1,1e5,.01],['burstWindow','突发窗口 (µs)',0,1e6,.001],['p99Budget','P99 预算 (µs)',0,1e6,.01],['p999Budget','P999 预算 (µs)',0,1e6,.01]
+  ],'P99 / P999 为热点端口排队模型估计，需用仿真或实测校准。']
+];
+
+return { report, sources, modelPresets, scenarioLabels, scenarioDefaults, templates, topologyNames, defaults, fields };
+})();
+modules['cluster-topologies.mjs'] = (() => {
+const atlas800 = 'https://e.huawei.com/cn/products/computing/ascend/atlas-800t-a2';
+const atlasGuide = 'https://serverflow.ru/upload/iblock/3bf/q2u89s80gevj3m17qvilz9qxunjf4x9e/%D0%A0%D1%83%D0%BA%D0%BE%D0%B2%D0%BE%D0%B4%D1%81%D1%82%D0%B2%D0%BE%20%D0%BF%D0%BE%D0%BB%D1%8C%D0%B7%D0%BE%D0%B2%D0%B0%D1%82%D0%B5%D0%BB%D1%8F%20Huawei%20Atlas%20800T%20A2.pdf';
+const cm384 = 'https://arxiv.org/pdf/2506.12708v2';
+const atlas950 = 'https://support.huaweicloud.com/resmgmt-modelarts/resmgmt-a5_0003.html';
+const hpn = 'https://cs.stanford.edu/~keithw/sigcomm2024/sigcomm24-final878-acmpaginated.pdf';
+const dgx = 'https://docs.nvidia.com/dgx/dgxh100-user-guide/introduction-to-dgxh100.html';
+const nvl = 'https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html';
+const nvlPorts = 'https://docs.nvidia.com/base-command-manager/product-manuals/11/nvidia-mission-control/nvlinkinfo';
+const spectrum = 'https://docs.nvidia.com/enterprise-reference-architectures/hgx-ai-factory-h100-h200-b200/latest/network-logical-architecture.html';
+const hpnNode = '每机 8 个后端 NIC，每 GPU 1 个 NIC。每 NIC 的两个 200 GbE 口分别接到同一 Rail 的两台 ToR，合计 400 Gb/s/GPU、3.2 Tb/s/主机。另 1 个 NIC 接前端。';
+const hpnFabric = '8 组 Rail × 2 台 ToR，共 16 台。每 ToR 下联 128×200G 活跃口 + 8×200G 备用口，上联 60×400G 到本平面 Aggregation。活跃下联/上联为 1.067:1。';
+const hpnPath = '同 Rail 跨主机经同一 Rail 的一台 ToR。跨 Rail 可借助机内互联切换到目标 Rail；跨 Segment 时再走对应平面的 Aggregation。';
+const hpnLinks = [{name:'HPN 论文 §3、§5，图 7 / 11',url:hpn}];
+const make = (id,vendor,gpus,name,level,scaleUp,scaleOut,ports,detail,diagram,links) => ({
+  id,vendor,gpus,name,level,scaleUp,scaleOut,ports,detail,diagram,links
+});
+const clusterTopologies = [
+  make('huawei-8','华为',8,'Atlas 800T A2','公开服务器配置','8 NPU HCCS Full Mesh','8×200GE RoCE 直出',
+    '8 个 200GE QSFP 端口；每 NPU 直出 200G RoCE。HCCS 对等链路以机内 8P Full Mesh 表示。',
+    'HCCS 是机内数据面，RoCE 端口用于机外网络。机内 HCCS 链路速率以设备资料为准。',
+    {mesh:true,levels:[['8×200GE RoCE 直出'],['8× Ascend NPU · HCCS Full Mesh']]},
+    [{name:'华为产品规格',url:atlas800},{name:'用户指南 §1.1（镜像）',url:atlasGuide}]),
+  make('ali-8','阿里云',8,'HPN 8 GPU 计算节点','论文公开节点','机内高带宽互联，如 NVLink','8 Rail × 双 200G',
+    hpnNode,'机内 Scale-up 具体链路取决于服务器和 GPU。图展示每个 GPU 到双 ToR 的 Rail 关系。',
+    {pair:true,levels:[['ToR A · Rail 0','ToR B · Rail 0','ToR A · Rail 7','ToR B · Rail 7'],['GPU 0 / NIC 1','GPU 7 / NIC 8'],['机内 8 GPU 高带宽互联']]},hpnLinks),
+  make('nvidia-8','NVIDIA',8,'DGX H100','公开服务器配置','NVLink 4 / 4× NVSwitch','8×200GbE ConnectX-7（数据表配置）',
+    '机内 NVLink 900 GB/s/GPU（双向合计）。数据表列出 8 个单端口 ConnectX-7，Ethernet 配置为每口 200 Gb/s。用户指南另列 100、200、400 GbE 支持速率，实际协商速率取决于配置。',
+    '集群端口还可配置为 InfiniBand，数据表的 NDR 模式为每口 400 Gb/s。',
+    {levels:[['8× ConnectX-7 · 200GbE'],['GPU 0','GPU 1','GPU 2–5','GPU 6','GPU 7'],['4× NVSwitch · NVLink 4']]},
+    [{name:'DGX H100 数据表',url:'https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/nvidia-dgx-h100-datasheet.pdf'},{name:'DGX 用户指南',url:dgx}]),
+  make('huawei-72','华为',72,'CloudMatrix384 · 72 NPU 分配','72 卡分配示例','跨 9 节点使用现有 7 平面 UB','超节点外另走 RDMA',
+    '每计算节点 8 NPU、7 个 L1 UB Switch，每个 L1 连接同平面 16 个 L2。母体每个 L2 有 48×28 GB/s 端口（单向，论文 v2）。',
+    '取现有 48 节点超节点中的 9 节点用于 72 卡工作负载，保留母体 L2 拓扑和端口配置。',
+    {pairedPlanes:true,levels:[['平面 0 · 16× L2','平面 1 · 16× L2','平面 6 · 16× L2'],['L1 · 平面 0','L1 · 平面 1','L1 · 平面 6'],['9 个节点 × 8 NPU']]},
+    [{name:'CloudMatrix384 论文 §3.3、图 4 / 5（v2）',url:cm384}]),
+  make('ali-72','阿里云',72,'HPN · 72 GPU 分配','72 卡分配示例','9 个独立 8 GPU 机内域','同一 HPN Segment，8 Rail × 双 ToR',
+    '从一个 Segment 选 9 台主机。每主机 8 个后端 NIC × 2 个 200G 口；同一 Rail 的每台 ToR 有 9 条活跃下联用于此分配。',
+    '共享既有 Segment 的 16 台 ToR，72 卡分配沿用母体端口布局。'+hpnPath,
+    {planes:true,levels:[['平面 A · 8 Rail ToR','平面 B · 8 Rail ToR'],['9 个计算节点 × 8 GPU']]},hpnLinks),
+  make('nvidia-72','NVIDIA',72,'GB200 NVL72','公开整柜配置','72 GPU 单一 NVLink 5 域','GB200 每计算托盘 4×400G ConnectX-7（集群侧）',
+    '18 个计算托盘 × 4 GPU；9 个交换托盘 × 2 颗 NVSwitch。每 GPU 有 18 条 NVLink，每颗 NVSwitch 连接 72 个 GPU 端口。GPU 双向带宽 1.8 TB/s。',
+    '每 GPU 各有一条 NVLink 到每颗交换芯片。ConnectX-7 面向柜间 Scale-out。',
+    {levels:[['9 个交换托盘 · 18× NVSwitch'],['计算托盘 0','计算托盘 1–16','计算托盘 17'],['18 个托盘 × 4 Blackwell GPU']]},
+    [{name:'GB200 硬件指南',url:nvl},{name:'NVLink 端口和带宽',url:nvlPorts}]),
+  make('huawei-1024','华为',1024,'Atlas 950 SuperPoD','公开 1024 模组配置','UB L1–L2 · 8 超平面','每计算柜 2 个 UB I/O 转换刀片',
+    '16 计算柜 × 64 NPU 模组。每柜 L1 有 4×32 接口；每平面 2 台 L2，共 16 台 L2，每台 128 接口，布置在 2 个互联柜。两侧各 2048 个接口。',
+    '各计算柜接入全部 8 个平面；跨柜路径经 L1 → 对应平面 L2 → L1。光模块 2+2 保护组的口径按厂商图，单接口 Payload 速率待核实。',
+    {pairedPlanes:true,levels:[['平面 0 · 2× L2','平面 1 · 2× L2','平面 7 · 2× L2'],['L1 · 平面 0','L1 · 平面 1','L1 · 平面 7'],['16 个计算柜 × 64 NPU 模组']]},
+    [{name:'华为云组网文档，图 1 / 2',url:atlas950}]),
+  make('ali-1024','阿里云',1024,'HPN · 1024 GPU Segment','SIGCOMM 公开部署','128 个活跃 8 GPU 机内域','单层 Rail 优化，8 Rail × 双 ToR',
+    hpnFabric,'128 台活跃主机，另有 8 台备用主机（64 GPU），备机不计入 1024。'+hpnPath,
+    {planes:true,levels:[['Agg A · 跨 Segment','Agg B · 跨 Segment'],['8× ToR · 平面 A','8× ToR · 平面 B'],['128 个活跃节点 × 8 GPU']]},hpnLinks),
+  make('nvidia-1024','NVIDIA',1024,'HGX Spectrum-X · 1024 GPU','公开参考架构','128 个独立 8 GPU NVLink 域','Spectrum-X · Rail 优化 Leaf–Spine',
+    '128 节点 × 8 个 400G SuperNIC。16 Leaf（4 Block × 4）、8 Spine。节点–Leaf 和 Leaf–Spine 各 1024 条 400G 链路；均摊为每 Leaf 64 下联 / 64 上联（400G 逻辑口径）。',
+    '每 Leaf 承载两条 GPU 位置 Rail，例如 1+5。图按参考架构压缩展示，Breakout 与设备物理口按厂商表 7 / 图 13。',
+    {levels:[['8× Spine · 400G'],['Block 0 · 4 Leaf','Block 1 · 4 Leaf','Block 2 · 4 Leaf','Block 3 · 4 Leaf'],['128 个 HGX 节点 × 8 GPU']]},
+    [{name:'NVIDIA 参考架构，表 7 / 图 13',url:spectrum}])
+];
+
+return { clusterTopologies };
+})();
+modules['native-network.mjs'] = (() => {
+const {clusterTopologies} = modules['cluster-topologies.mjs'];
+
+function nativeTopology(id){
+  return typeof id==='string'&&id.startsWith('native:')?clusterTopologies.find(t=>t.id===id.slice(7)):undefined;
+}
+
+const notes={
+  'huawei-8':'HCCS 按 7 条对等链路均分 392 GB/s 双向标称带宽，折算为每对端 28 GB/s 单向。RoCE 口通往外部。',
+  'huawei-72':'保留选中的 9 个节点和母体 7 平面。每 NPU–L1 为 2×28 GB/s 单向；每 L1–L2 为 1×28 GB/s。外部 RDMA 单独列示。',
+  'huawei-1024':'按 16 柜、8 平面、每平面 2 台 L2 的结构推导路径。柜内 NPU–L1 为逻辑分组。端口速率缺省待标定，可在原生链路参数中填写。',
+  'ali-8':'机内互联缺省取论文双向范围下限 400 Gb/s 的一半，即 200 Gb/s 单向，可按 GPU 型号调整。每 GPU 的两个 200GbE 端口分别通向双 ToR。',
+  'ali-72':'机内互联缺省采用 200 Gb/s 单向，可调整。同一 Segment 内按同 Rail 的双 ToR 分摊。跨 Rail 可经源端或目的端的机内互联。',
+  'ali-1024':'机内互联缺省采用 200 Gb/s 单向，可调整。活跃 Segment 内按同 Rail 双 ToR 分摊，跨 Rail 经机内互联。跨 Segment 400G 上联与备用节点见厂商拓扑。',
+  'nvidia-8':'每 GPU 的 450 GB/s 单向 NVLink 带宽在 4 颗 NVSwitch 间均分，交换芯片之间的多条物理 NVLink 按 GPU–Switch 聚合列示。',
+  'nvidia-72':'18 颗 NVSwitch，每 GPU 与每颗交换芯片之间 1 条 50 GB/s 单向 NVLink 5；机外 ConnectX-7 为独立端口。',
+  'nvidia-1024':'机内按 H100 的 NVLink 4 建模。每 32 台主机分为一 Block，Leaf 承载两条 Rail。每 Leaf–Spine 邻接均分为 8×400GbE。'
+};
+function nativeNote(id){return notes[id]}
+
+function makeNetwork(){
+  const nodes=[],edges=[],adj={},gpus=[],leaves=[],spines=[],hosts=[];
+  function node(id,type,group){
+    nodes.push({id,type,group});adj[id]=[];return id;
+  }
+  function connect(a,b,details){
+    const edge={a,b,...details,ab:0,ba:0,hopsAB:0,hopsBA:0};
+    edges.push(edge);
+    adj[a].push({to:b,edge,dir:'ab',hop:'hopsAB'});
+    adj[b].push({to:a,edge,dir:'ba',hop:'hopsBA'});
+    return edge;
+  }
+  return {nodes,edges,adj,gpus,leaves,spines,hosts,node,connect};
+}
+
+function buildNativeGraph(c,t){
+  const net=makeNetwork(),{node,connect,gpus}=net;
+  const size=t.id==='huawei-1024'?64:t.id==='nvidia-72'?72:8;
+  const isHuawei=t.vendor==='华为';
+  for(let i=0;i<t.gpus;i++)gpus.push(node((isHuawei?'NPU ':'GPU ')+i,'gpu',Math.floor(i/size)));
+  function link(a,b,protocol,gbps,count=1,label=protocol){
+    const raw=gbps===null?null:gbps/8*count;
+    return connect(a,b,{kind:'native',protocol,label,count,raw,cap:raw===null?null:raw*c.eff/100});
+  }
+  function localSwitches(members,prefix,n,rate,protocol,label){
+    for(let k=0;k<n;k++){
+      const sw=node(prefix+' '+k,'leaf',k);
+      for(const gpu of members)link(gpu,sw,protocol,rate,1,label);
+    }
+  }
+  function external(gpu,i,protocol,rate,number=1){
+    for(let k=0;k<number;k++)link(gpu,node('外部 '+i+'.'+k,'external',i),protocol,rate);
+  }
+  let routeAccelerators;
+  if(t.id==='huawei-8'){
+    for(let i=0;i<8;i++){
+      for(let j=i+1;j<8;j++)link(gpus[i],gpus[j],'HCCS',224);
+      external(gpus[i],i,'200GbE RoCE',200);
+    }
+  }else if(t.id==='huawei-72'||t.id==='huawei-1024'){
+    const cm=t.id==='huawei-72',planes=cm?7:8,l2Count=cm?16:2;
+    const access=[],uplink=[];
+    for(let p=0;p<planes;p++){
+      const l2=Array.from({length:l2Count},(_,j)=>node('UB L2 '+p+'.'+j,'spine',p));
+      access[p]=[];
+      uplink[p]=[];
+      for(let i=0;i<t.gpus/size;i++){
+        const l1=node('UB L1 '+i+'.'+p,'leaf',i);
+        for(let j=0;j<size;j++)access[p].push(link(gpus[i*size+j],l1,'UB',cm?224:(c.nativeEndpointBW||null),cm?2:1,cm?'UB':'UB NPU–L1 逻辑路径'));
+        uplink[p][i]=l2.map(sw=>link(l1,sw,'UB',cm?224:(c.nativeUplinkBW||null),cm?1:8));
+      }
+    }
+    routeAccelerators=(src,dst,rate)=>{
+      const a=Math.floor(src/size),b=Math.floor(dst/size),perPlane=rate/planes,hops=a===b?2:4;
+      for(let p=0;p<planes;p++){
+        const up=access[p][src],down=access[p][dst];
+        up.ab+=perPlane;up.hopsAB=Math.max(up.hopsAB,hops);
+        down.ba+=perPlane;down.hopsBA=Math.max(down.hopsBA,hops);
+        if(a!==b)for(let j=0;j<l2Count;j++){
+          const from=uplink[p][a][j],to=uplink[p][b][j];
+          from.ab+=perPlane/l2Count;from.hopsAB=Math.max(from.hopsAB,hops);
+          to.ba+=perPlane/l2Count;to.hopsBA=Math.max(to.hopsBA,hops);
+        }
+      }
+    };
+    if(cm)gpus.forEach((gpu,i)=>external(gpu,i,'400G RDMA',400));
+  }else if(t.vendor==='阿里云'){
+    const tors=Array.from({length:8},(_,rail)=>['A','B'].map(p=>node('ToR '+p+' · Rail '+rail,'leaf',rail)));
+    for(let i=0;i<t.gpus;i+=8){
+      const host=i/8;
+      const members=gpus.slice(i,i+8);
+      localSwitches(members,'机内 Fabric '+host,1,c.nativeEndpointBW||null,'机内互联','机内互联 · 每 GPU 单向');
+      members.forEach((gpu,rail)=>{
+        for(const tor of tors[rail])link(gpu,tor,'200GbE RoCE',200,1,'200GbE · GPU 对应 NIC');
+      });
+    }
+  }else if(t.id==='nvidia-72'){
+    localSwitches(gpus,'NVSwitch',18,400,'NVLink 5');
+    gpus.forEach((gpu,i)=>external(gpu,i,'400G ConnectX-7',400));
+  }else if(t.id==='nvidia-1024'){
+    const spines=Array.from({length:8},(_,i)=>node('Spectrum Spine '+i,'spine',i));
+    const leaves=Array.from({length:16},(_,i)=>node('Spectrum Leaf '+i,'leaf',i));
+    leaves.forEach(leaf=>spines.forEach(spine=>link(leaf,spine,'400GbE',400,8)));
+    for(let i=0;i<t.gpus;i+=8){
+      const host=i/8;
+      const members=gpus.slice(i,i+8);
+      localSwitches(members,'NVSwitch '+host,4,900,'NVLink 4','NVLink 4 · GPU–Switch 聚合');
+      members.forEach((gpu,rail)=>link(gpu,leaves[Math.floor(host/32)*4+rail%4],'400GbE',400,1,'400GbE · GPU 对应 SuperNIC'));
+    }
+  }else{
+    localSwitches(gpus,'NVSwitch',4,900,'NVLink 4','NVLink 4 · GPU–Switch 聚合');
+    gpus.forEach((gpu,i)=>external(gpu,i,c.nativeEthernet+'GbE ConnectX-7',c.nativeEthernet));
+  }
+  return {...net,native:t,domainSize:size,routeAccelerators};
+}
+
+return { nativeTopology, nativeNote, makeNetwork, buildNativeGraph };
+})();
+modules['engine.mjs'] = (() => {
+const {nativeTopology,buildNativeGraph,makeNetwork} = modules['native-network.mjs'];
+
+const {fields} = modules['data.mjs'];
+
+const metricLabels = {need:'热点所需带宽 (GB/s)',capacity:'热点有效带宽 (GB/s)',util:'热点端口利用率 (%)',buffer:'Egress Buffer 需求 (KiB)',credit:'Credit BDP (KiB)',p99:'P99 估计 (µs)',p999:'P999 估计 (µs)',inject:'全域注入 (GB/s)',blocked:'未路由流量 (GB/s)'};
+const rowNames = {
+  ar:['AllReduce','TP 激活 + 训练 DP / 专家梯度'],ag:['AllGather','TP 内 SP 激活收集'],rs:['ReduceScatter','TP 内 SP 激活分片'],
+  a2a:['额外 TP All2All','显式重分布张量分片'],dispatch:['MoE 路由 · Dispatch','EP All2All · Token 发往专家'],
+  combine:['MoE 路由 · Combine','EP All2All · 输出返回源 Rank'],pp:['PP 点对点','相邻 Stage 激活与训练梯度'],
+  weights:['权重广播','Switch 按权重分片扇出'],kv:['KV Cache 同步','新增 Token KV + 完整序列迁移']
+};
+function validate(c){
+  const errors=[];
+  const native=nativeTopology(c.template);
+  for(const [, , list] of fields)for(const [key,label,min,max,step] of list){
+    const v=c[key];
+    if(typeof min==='number' && (!Number.isFinite(v)||v<min||v>max||(step===1&&!Number.isInteger(v))))errors.push(label+'超出范围');
+    if(typeof min==='object' && !Object.hasOwn(min,v))errors.push(label+'选项无效');
+  }
+  if(errors.length)return errors;
+  if(c.tp*c.dp*c.pp!==c.gpus)errors.push('GPU 数须等于 TP × DP × PP。');
+  if(c.dp%c.ep)errors.push('EP 必须整除 DP。');
+  if(c.tp%c.sp)errors.push('SP 必须整除 TP。');
+  if(c.prefillLayers>c.layers)errors.push('Prefill 活跃层数不能超过 Transformer 层数。');
+  if(c.moeLayers>c.layers)errors.push('MoE 层数不能超过 Transformer 层数。');
+  if(c.topK>c.experts)errors.push('Top-K 不能超过专家数。');
+  if(c.moeLayers&&c.experts%c.ep)errors.push('专家数须能被 EP 整除，本模型采用均匀专家放置。');
+  if(native&&c.gpus!==native.gpus)errors.push('厂商配置固定为 '+native.gpus+' 卡。');
+  if(!native&&(c.groups>c.gpus||c.gpus%c.groups))errors.push('GPU 数须能被分组数整除。');
+  if(!native&&c.topology==='star'&&c.groups!==1)errors.push('单层扇出需要 1 个 GPU 分组。');
+  if(c.pp>c.layers)errors.push('PP 不能超过 Transformer 层数。');
+  if(c.batch<c.dp&&c.scenario==='decode')errors.push('Decode 的全局 Batch Size 至少等于 DP。');
+  return errors;
+}
+const linkRaw=(gen,lane)=>gen===6?8*lane:4*lane*128/130;
+function graph(c){
+  const net=makeNetwork(),{node,connect,hosts,leaves,gpus,spines}=net;
+  const add=(a,b,kind,gen,lane,count=1,override)=> {
+    if(!count)return;
+    const raw=override??linkRaw(gen,lane)*count;
+    connect(a,b,{kind,gen,lane,count,raw,cap:override??raw*c.eff/100});
+  };
+  const groupSize=c.gpus/c.groups;
+  for(let i=0;i<Math.ceil(c.groups/c.perHost);i++)hosts.push(node('CPU '+i,'host',i));
+  for(let i=0;i<c.groups;i++){
+    const host=hosts[Math.floor(i/c.perHost)];
+    const leaf=c.topology==='direct'?host:node('SW '+i,'leaf',i);
+    leaves.push(leaf);
+    if(leaf!==host)add(host,leaf,'up',c.upGen,c.upLane,c.upCount);
+    for(let j=0;j<groupSize;j++){
+      const gpu=node('GPU '+gpus.length,'gpu',i);gpus.push(gpu);
+      add(leaf,gpu,'gpu',c.gen,c.lane);
+    }
+  }
+  if(c.topology==='mesh'||c.topology==='ring')for(let a=0;a<leaves.length;a++)for(let b=a+1;b<leaves.length;b++){
+    if(c.topology==='mesh'||b===a+1||(a===0&&b===leaves.length-1))add(leaves[a],leaves[b],'isl',c.islGen,c.islLane,c.islCount);
+  }
+  if(c.topology==='clos')for(let i=0;i<c.spines;i++){
+    const s=node('Spine '+i,'spine',i);spines.push(s);
+    for(const leaf of leaves)add(leaf,s,'isl',c.islGen,c.islLane,c.islCount);
+  }
+  if(c.hostStaging&&c.hostBridge>0)for(let a=0;a<hosts.length;a++)for(let b=a+1;b<hosts.length;b++)add(hosts[a],hosts[b],'bridge',0,0,1,c.hostBridge);
+  return {...net,groupSize};
+}
+function routeIndex(net,src,mode){
+  const dist={[src]:0},parents={},count={[src]:1},queue=[src];
+  for(let i=0;i<queue.length;i++){
+    const current=queue[i];
+    for(const link of net.adj[current]){
+      if(mode==='local'&&/GbE|RDMA|ConnectX/.test(link.edge.protocol))continue;
+      if(mode==='peer'&&(link.edge.kind==='up'||link.edge.kind==='bridge'||(link.edge.kind==='gpu'&&link.edge.a.startsWith('CPU '))))continue;
+      const d=dist[current]+1;
+      if(dist[link.to]===undefined){dist[link.to]=d;parents[link.to]=[];count[link.to]=0;queue.push(link.to)}
+      if(dist[link.to]===d){parents[link.to].push({from:current,link});count[link.to]+=count[current]}
+    }
+  }
+  return {dist,parents,count};
+}
+function calculate(c){
+  const errors=validate(c);
+  if(errors.length)return {errors};
+  const native=nativeTopology(c.template),net=native?buildNativeGraph(c,native):graph(c);
+  const rows=Object.fromEntries(Object.keys(rowNames).map(key=>[key,{tx:new Float64Array(c.gpus),rx:new Float64Array(c.gpus),total:0,blocked:0}]));
+  const indices=new Map();
+  function index(from,mode){
+    const k=from+'|'+mode;
+    const existing=indices.get(k);
+    if(existing){
+      indices.delete(k);
+      indices.set(k,existing);
+      return existing;
+    }
+    if(indices.size>=48)indices.delete(indices.keys().next().value);
+    const result=routeIndex(net,from,mode);
+    indices.set(k,result);
+    return result;
+  }
+  function flow(key,src,dst,rate){
+    if(rate===0||src===dst)return;
+    const row=rows[key];
+    if(typeof src==='number')row.tx[src]+=rate;
+    if(typeof dst==='number')row.rx[dst]+=rate;
+    row.total+=rate;
+    if(net.routeAccelerators&&typeof src==='number'&&typeof dst==='number'){net.routeAccelerators(src,dst,rate);return}
+    const from=typeof src==='number'?net.gpus[src]:src;
+    const to=typeof dst==='number'?net.gpus[dst]:dst;
+    if(!net.adj[from]||!net.adj[to]){row.blocked+=rate;return}
+    const isHost=typeof src==='string'||typeof dst==='string';
+    const sameDomain=native&&!isHost&&Math.floor(src/net.domainSize)===Math.floor(dst/net.domainSize);
+    let path=index(from,isHost?'host':sameDomain?'local':'peer');
+    if(!native&&!isHost&&path.dist[to]===undefined&&c.hostStaging)path=index(from,'host');
+    const hops=path.dist[to];
+    if(hops===undefined){row.blocked+=rate;return}
+    // Combine contributions to the same node before traversing the preceding hop.
+    let frontier=new Map([[to,rate]]);
+    for(let hop=hops;hop>0;hop--){
+      const prevLoads=new Map();
+      for(const [at,load] of frontier)for(const {from:prev,link} of path.parents[at]){
+        const share=load*path.count[prev]/path.count[at];
+        link.edge[link.dir]+=share;
+        link.edge[link.hop]=Math.max(link.edge[link.hop],hops);
+        prevLoads.set(prev,(prevLoads.get(prev)??0)+share);
+      }
+      frontier=prevLoads;
+    }
+  }
+  function broadcastWeight(host,targets,rate){
+    const row=rows.weights;
+    const path=net.adj[host]?index(host,'host'):null;
+    const branches=new Map();
+    for(const rank of targets){
+      row.rx[rank]+=rate;
+      let at=net.gpus[rank];
+      const hops=path?.dist[at];
+      if(hops===undefined){row.blocked+=rate;continue}
+      while(at!==host){
+        // Fix one parent per node so receivers sharing a prefix use one transmission.
+        const {from,link}=path.parents[at][0];
+        const existing=branches.get(link.edge);
+        if(existing)existing.hops=Math.max(existing.hops,hops);
+        else branches.set(link.edge,{from,link,hops});
+        at=from;
+      }
+    }
+    for(const {from,link,hops} of branches.values()){
+      link.edge[link.dir]+=rate;
+      link.edge[link.hop]=Math.max(link.edge[link.hop],hops);
+      if(from===host)row.total+=rate;
+    }
+  }
+  const isTrain=c.scenario==='train', isDecode=c.scenario==='decode';
+  const isDiffusion=c.scenario==='diffusion';
+  const tokenMultiplier=isDiffusion?c.seq*c.denoiseSteps*c.cfgPasses:1;
+  const globalStepTokens=c.batch*(isDecode?1:isDiffusion?tokenMultiplier:c.seq);
+  const tokenRate=c.tps*tokenMultiplier,stepRate=tokenRate/globalStepTokens;
+  const tps=tokenRate/c.dp;
+  const bytes=tps*c.hidden*c.act;
+  const trainingFactor=isTrain?2:1;
+  const rank=(p,d,t)=>p*c.dp*c.tp+(c.placement==='ep'?t*c.dp+d:d*c.tp+t);
+  const layersAt=(count,p)=>Math.floor(count/c.pp)+(p<count%c.pp?1:0);
+  const ring=(key,group,s,repeat=1)=>{
+    const n=group.length;
+    if(n<2||s===0)return;
+    for(let i=0;i<n;i++)flow(key,group[i],group[(i+1)%n],s*(n-1)/n*repeat);
+  };
+  const activeAt=(p)=>{
+    if(c.scenario!=='prefill'||!c.prefillLayers)return layersAt(c.layers,p);
+    const earlier=p*Math.floor(c.layers/c.pp)+Math.min(p,c.layers%c.pp);
+    return Math.min(layersAt(c.layers,p),Math.max(0,c.prefillLayers-earlier));
+  };
+  const dense=c.params*1e9*(1-(c.moeLayers?c.expertShare/100:0));
+  const expert=c.params*1e9-dense;
+  const hostForRank=i=>native?'Host 未建模':net.hosts[Math.floor(Math.floor(i/net.groupSize)/c.perHost)];
+  for(let p=0;p<c.pp;p++){
+    const totalMoe=layersAt(c.moeLayers,p),layers=activeAt(p),moe=Math.min(layers,totalMoe);
+    const denseShard=dense*layersAt(c.layers,p)/c.layers/c.tp;
+    const expertShard=totalMoe?expert*totalMoe/c.moeLayers/(c.tp*c.ep):0;
+    const weightGroups=new Map();
+    const addWeightTarget=(key,host,target,shard)=>{
+      if(!shard)return;
+      const groupId=host+'|'+key;
+      if(!weightGroups.has(groupId))weightGroups.set(groupId,{host,targets:[],rate:shard*c.weight/c.weightWindow});
+      weightGroups.get(groupId).targets.push(target);
+    };
+    for(let d=0;d<c.dp;d++){
+      const group=Array.from({length:c.tp},(_,t)=>rank(p,d,t));
+      const s=bytes*layers*c.tpOps*trainingFactor;
+      if(c.sp>1){ring('ag',group,s);ring('rs',group,s)}
+      else ring('ar',group,s,2);
+      if(c.alltoall)for(const a of group)for(const b of group)flow('a2a',a,b,bytes*layers*c.alltoall*trainingFactor/c.tp);
+      for(let t=0;t<c.tp;t++){
+        const i=rank(p,d,t);
+        if(p+1<c.pp&&activeAt(p+1)>0){
+          const j=rank(p+1,d,t);
+          flow('pp',i,j,bytes/c.sp);
+          if(isTrain)flow('pp',j,i,bytes/c.sp);
+        }
+        const host=hostForRank(i);
+        if(c.weightWindow){
+          addWeightTarget('dense:'+t,host,i,denseShard);
+          addWeightTarget('expert:'+t+':'+(d%c.ep),host,i,expertShard);
+        }
+        if(!isTrain&&!isDiffusion&&(c.kvPct||c.kvMoves)){
+          const kvRate=(tps*c.kvPct/100+c.kvMoves*c.seq/c.dp)*c.kvBytes*layers/c.tp;
+          const kvPeer=c.gpus>1?(i+1)%c.gpus:host;
+          flow('kv',i,c.kvMode==='host'?host:kvPeer,kvRate);
+        }
+      }
+    }
+    for(const {host,targets,rate} of weightGroups.values())broadcastWeight(host,targets,rate);
+    for(let t=0;t<c.tp;t++){
+      const dpGroup=Array.from({length:c.dp},(_,d)=>rank(p,d,t));
+      if(isTrain){
+        const grad=c.gradient*stepRate;
+        ring('ar',dpGroup,(denseShard+(c.expertGrad==='dense'?expertShard:0))*grad,2);
+        if(c.expertGrad==='replicated')for(let e=0;e<c.ep;e++){
+          const group=Array.from({length:c.dp/c.ep},(_,r)=>rank(p,r*c.ep+e,t));
+          ring('ar',group,expertShard*grad,2);
+        }
+      }
+      if(c.ep>1&&moe){
+        const remote=bytes/c.tp*moe*c.topK*(1-1/c.ep)*trainingFactor;
+        for(let d=0;d<c.dp;d+=c.ep)for(let a=0;a<c.ep;a++){
+          const hot=a===0?1:0;
+          for(let b=0;b<c.ep;b++){
+            if(a===b)continue;
+            const transfer=remote*(b===hot?c.skew:1)/(c.ep-2+c.skew);
+            flow('dispatch',rank(p,d+a,t),rank(p,d+b,t),transfer);
+            flow('combine',rank(p,d+b,t),rank(p,d+a,t),transfer);
+          }
+        }
+      }
+    }
+  }
+  const burstSeconds=c.burstWindow*1e-6;
+  const links=net.edges.map(e=>{
+    const need=Math.max(e.ab,e.ba)/1e9;
+    const util=e.cap===null?null:need/e.cap;
+    const hops=e.ab>=e.ba?e.hopsAB:e.hopsBA;
+    const buffer=e.cap===null?null:Math.max(0,need*c.burstFactor-e.cap)*1e9*burstSeconds/1024/e.count;
+    const credit=e.cap===null?null:e.cap*1e9*c.creditRTT*1e-6/1024/e.count;
+    const tail=p=>!need?0:util===null||util>=1?null:hops*c.baseHop-Math.log1p(-p)*c.packet/(e.cap/e.count*1000*(1-util));
+    return {...e,need,util,hops,buffer,credit,p99:tail(.99),p999:tail(.999)};
+  }).sort((a,b)=>Number(b.need>0)-Number(a.need>0)||(b.util??-1)-(a.util??-1)||b.need-a.need);
+  const incomplete=links.some(l=>l.cap===null&&l.need>0);
+  const known=links.filter(l=>l.cap!==null);
+  const hot=known.find(l=>l.need>0)??(incomplete?links.find(l=>l.cap===null&&l.need>0):known[0]??links[0]);
+  const blocked=Object.values(rows).reduce((s,r)=>s+r.blocked,0)/1e9;
+  const worstBuffer=known.reduce((a,b)=>!a||b.buffer>a.buffer?b:a,null);
+  const worstTail=key=>!known.length||known.some(l=>l[key]===null)?null:Math.max(...known.map(l=>l[key]));
+  const switchUsage=native?[]:net.nodes.filter(n=>['leaf','spine'].includes(n.type)).map(n=>{
+    const edges=net.adj[n.id].map(x=>x.edge);
+    return {id:n.id,ports:edges.reduce((sum,e)=>sum+e.count,0),lanes:edges.reduce((sum,e)=>sum+e.count*e.lane,0)};
+  });
+  const metrics={need:hot.need,capacity:hot.cap,util:hot.util===null?null:hot.util*100,
+    buffer:hot.cap===null?null:worstBuffer.buffer,
+    credit:native?null:Math.max(...known.filter(l=>l.kind!=='bridge').map(l=>l.credit)),
+    p99:hot.cap===null?null:worstTail('p99'),p999:hot.cap===null?null:worstTail('p999'),
+    inject:Object.values(rows).reduce((s,r)=>s+r.total,0)/1e9,blocked};
+  const notices=[];
+  if(blocked>1e-9)notices.push(['bad','存在未路由流量 '+blocked.toFixed(2)+' GB/s。'+(native?'本配置只建模加速器互联，Host 装载或机外对端需要另设路径。':'检查 Rank 放置、ISL 或可用 CPU 中转路径。')]);
+  if(incomplete)notices.push(['warn','部分活跃原生链路的容量待标定。已计算通信量，利用率、Buffer 和尾延仅覆盖已标定链路。']);
+  if(switchUsage.some(s=>s.ports>c.switchPorts||s.lanes>c.switchLanes)){
+    const s=switchUsage.find(s=>s.ports>c.switchPorts||s.lanes>c.switchLanes);
+    notices.push(['bad',s.id+' 需要 '+s.ports+' 端口 / '+s.lanes+' lanes，超过 Switch 输入预算。仅统计建模链路。']);
+  }
+  if(metrics.util>=100)notices.push(['bad','热点 '+hot.a+' ↔ '+hot.b+' 达 '+metrics.util.toFixed(1)+'%，稳态排队模型无有限尾延。']);
+  else if(metrics.util>=75)notices.push(['warn','热点 '+hot.a+' ↔ '+hot.b+' 达 '+metrics.util.toFixed(1)+'%，关注 MoE 偏斜与突发并发。']);
+  if(metrics.buffer>c.buffer)notices.push(['bad',worstBuffer.a+' ↔ '+worstBuffer.b+' 的突发积压超过 Egress Buffer 预算。']);
+  if((metrics.p99??0)>c.p99Budget||(metrics.p999??0)>c.p999Budget)notices.push(['bad','排队模型的 P99 / P999 超过输入时延预算。']);
+  if(!native&&c.hostStaging)notices.push(['warn','CPU 中转作为可用路径建模，需核实 ACS、IOMMU、P2P、Host DMA 与 NUMA 带宽。']);
+  if(!notices.length)notices.push(['good','已建模的链路、端口、Buffer 和尾延在输入预算内。']);
+  return {net,rows,links,hot,metrics,notices,switchUsage,stepRate,globalStepTokens,incomplete,verdict:notices.some(n=>n[0]==='bad')?'有约束超限':notices.some(n=>n[0]==='warn')?'需核查':'理论预算内'};
+}
+
+return { metricLabels, rowNames, validate, graph, calculate };
+})();
+modules['app.mjs'] = (() => {
+const {mountHardware} = modules['hardware-page.mjs'];
+
+const {defaults,fields,modelPresets,scenarioDefaults,scenarioLabels,templates,topologyNames,report,sources} = modules['data.mjs'];
+
+const {clusterTopologies} = modules['cluster-topologies.mjs'];
+
+const {nativeTopology,nativeNote} = modules['native-network.mjs'];
+
+const {calculate,validate,metricLabels,rowNames} = modules['engine.mjs'];
+
+const $=(id)=>document.getElementById(id);
+const esc=(s)=>String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const num=(v,d=2)=>v===null||v===undefined?'—':v.toLocaleString('zh-CN',{maximumFractionDigits:d});
+const volume=(v,unit)=>(v>0&&v<.01?'&lt;0.01':num(v))+' '+unit;
+const stamp=(v)=>new Intl.DateTimeFormat('zh-CN',{dateStyle:'short',timeStyle:'short',timeZone:'Asia/Shanghai'}).format(new Date(v));
+const opt=(k,v)=>'<option value="'+esc(k)+'">'+esc(v)+'</option>';
+const link=(url,label)=>'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+' ↗</a>';
+const safeLink=(url)=>{try{return /^https?:$/.test(new URL(url).protocol)}catch{return false}};
+const pageNames={analysis:'需求分析',hardware:'硬件规格与仿真',compare:'方案对比',templates:'拓扑模板',evidence:'验证记录',history:'历史版本'};
+const kindNames={theory:'理论推导',simulation:'仿真',measured:'实测'};
+const storageKey='pcie6-scaleup-workbench-v1';
+const customTemplateId='custom-pcie';
+const customTemplateName='自定义 PCIe 拓扑';
+function templateBy(id){return templates.find(t=>t.id===id)}
+let state={config:{...defaults},versions:[],evidence:[]},storageError=false;
+try{
+  const data=localStorage.getItem(storageKey);
+  if(data)state=normalize(JSON.parse(data));
+}catch{storageError=true}
+let page='analysis',compareMode='model',templateLibrary='native',evidenceKind='all',toastTimer,versionA='',versionB='',recalc;
+const config=()=>state.config;
+const modelName=(c)=>modelPresets[c.model]?.label??modelPresets.custom.label;
+const templateName=(c)=>{
+  const native=nativeTopology(c.template);
+  if(native)return native.vendor+' · '+native.name;
+  const base=templateBy(c.template);
+  if(!base)return customTemplateName;
+  return Object.entries(base.config).some(([key,value])=>c[key]!==value)?base.name+'（已调整）':base.name;
+};
+function toast(s){
+  $('toast').textContent=s;$('toast').hidden=false;
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4200);
+}
+function persist(){
+  try{localStorage.setItem(storageKey,JSON.stringify(state))}
+  catch{toast('浏览器存储不可用或已满。请导出 JSON 保留当前内容。')}
+}
+function field(input,value){
+  const [key,label,min,max,step]=input;
+  const wrapper='<label data-field="'+key+'" class="field'+(min==='check'?' check':'')+'"><span>'+esc(label)+'</span>';
+  if(min==='check')return wrapper+'<input name="'+key+'" type="checkbox"'+(value?' checked':'')+'></label>';
+  if(typeof min==='object')return wrapper+'<select name="'+key+'">'+Object.entries(min).map(([k,v])=>opt(k,v)).join('')+'</select></label>';
+  return wrapper+'<input name="'+key+'" type="number" value="'+esc(value)+'" min="'+min+'" max="'+max+'" step="'+step+'" required></label>';
+}
+function syncFields(){
+  const c=config(),preset=modelPresets[c.model],native=nativeTopology(c.template);
+  $('model').value=c.model;
+  $('scenario').innerHTML=Object.entries(scenarioLabels).filter(([key])=>c.model==='custom'||(key==='diffusion')===!!preset.diffusion).map(([key,label])=>opt(key,label)).join('');
+  $('scenario').value=c.scenario;
+  const selector=$('template');
+  const custom=selector.querySelector('option[value="'+customTemplateId+'"]');
+  if(config().template===customTemplateId&&!custom)selector.add(new Option(customTemplateName,customTemplateId));
+  if(config().template!==customTemplateId&&custom)custom.remove();
+  selector.value=config().template;
+  for(const e of $('params').elements){
+    if(e.type==='checkbox')e.checked=config()[e.name];
+    else e.value=config()[e.name]??'';
+  }
+  const modelLink=preset.url??(c.model==='kimi'?sources.kimi:c.model==='deepseek'?sources.deepseekModel:null);
+  const configLink=preset.configUrl??(c.model==='deepseek'?sources.deepseek:null);
+  $('model-note').innerHTML=c.model==='custom'?'输入所用模型或 checkpoint 的参数。':esc(preset.modelNote)+' '+(modelLink?link(modelLink,'模型资料'):'')+(configLink?' · '+link(configLink,'Config'):'');
+  const showField=(key,visible)=>document.querySelector('[data-field="'+key+'"]').hidden=!visible;
+  const diffusion=c.scenario==='diffusion';
+  document.querySelector('[data-field="tps"] span').textContent=diffusion?'全域生成样本/s':'全域 Token/s';
+  document.querySelector('[data-field="seq"] span').textContent=diffusion?'每样本每遍 Token 数':'Seq Length';
+  for(const key of ['denoiseSteps','cfgPasses'])showField(key,diffusion);
+  for(const key of ['kvPct','kvBytes','kvMoves','kvMode','prefillLayers'])showField(key,!diffusion);
+  $('workload-hint').textContent=diffusion?'Denoiser Token/s = 样本/s × 每样本 Token × Steps × Passes。请按实际分辨率、时长和 CFG 设置。':'Decode 每序列每步 1 Token。Prefill / Train 每步为 Batch × Seq。完整 KV 迁移按 Seq Length 计算。权重加载窗口为 0 表示关闭。';
+  $('params').elements.gpus.readOnly=!!native;
+  document.querySelector('[data-group="pcie"]').hidden=!!native;
+  document.querySelector('[data-group="native"]').hidden=!native||!(native.id==='nvidia-8'||native.id==='huawei-1024'||native.vendor==='阿里云');
+  showField('nativeEthernet',native?.id==='nvidia-8');
+  showField('nativeEndpointBW',native?.id==='huawei-1024'||native?.vendor==='阿里云');
+  showField('nativeUplinkBW',native?.id==='huawei-1024');
+}
+function setConfig(next){state.config={...next};persist();syncFields();render()}
+function bestFactors(n,c,fitDecode=false){
+  const maxDp=fitDecode&&c.scenario==='decode'?c.batch:Infinity;
+  if(c.tp*c.dp*c.pp===n&&c.dp<=maxDp)return {};
+  const tp=n%c.tp===0?c.tp:1;
+  let pp=n%(tp*c.pp)===0?c.pp:1;
+  for(let candidate=pp+1;n/tp/pp>maxDp&&candidate<=Math.min(c.layers,n/tp);candidate++){
+    if(n%(tp*candidate)===0&&n/tp/candidate<=maxDp)pp=candidate;
+  }
+  const dp=n/tp/pp;
+  return {tp,pp,dp,ep:dp%c.ep===0?c.ep:1,sp:tp%c.sp===0?c.sp:1};
+}
+function withTemplate(c,t){return {...c,...t.config,...bestFactors(t.config.gpus,c),template:t.id}}
+function withNative(c,id){
+  const t=nativeTopology(id);
+  return {...c,...bestFactors(t.gpus,c,true),template:id,gpus:t.gpus,nativeEthernet:200,nativeEndpointBW:t.vendor==='阿里云'?200:0,nativeUplinkBW:0};
+}
+function withModel(c,key){
+  if(key==='custom')return {...c,model:key};
+  const {label,modelNote,diffusion,url,configUrl,...params}=modelPresets[key];
+  const next={...c,...params,model:key,ep:params.moeLayers&&params.experts%c.ep===0?c.ep:1};
+  if(diffusion&&c.scenario!=='diffusion')return withScenario(next,'diffusion');
+  if(!diffusion&&c.scenario==='diffusion')return withScenario(next,'decode');
+  return next;
+}
+function withScenario(c,key){
+  const next={...c,...scenarioDefaults[key],scenario:key};
+  return {...next,...(nativeTopology(c.template)?bestFactors(c.gpus,next,true):{})};
+}
+function table(headers,body){
+  return '<table><thead><tr>'+headers.map(h=>'<th scope="col">'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+body.join('')+'</tbody></table>';
+}
+const tr=(cols,cls='')=>'<tr class="'+cls+'">'+cols.map(v=>'<td>'+v+'</td>').join('')+'</tr>';
+const metricText=(m,k)=>m[k]===null?(k.startsWith('p99')&&m.util!==null?'无有限估计':'—'):num(m[k]);
+function openPage(name){
+  page=Object.hasOwn(pageNames,name)?name:'analysis';
+  for(const key of Object.keys(pageNames))$(key).hidden=key!==page;
+  document.querySelectorAll('nav button').forEach(b=>b.dataset.page===page?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
+  $('breadcrumb').textContent=pageNames[page];
+  window.scrollTo(0,0);render();
+}
+function navigate(name){if(location.hash==='#'+name)openPage(name);else location.hash=name}
+window.addEventListener('hashchange',()=>openPage(location.hash.slice(1)));
+function render(){
+  if(page==='analysis')renderAnalysis();
+  if(page==='compare')renderCompare();
+  if(page==='templates')renderTemplates();
+  if(page==='evidence')renderEvidence();
+  if(page==='history')renderHistory();
+}
+function diagram(c,r){
+  if(!r.net)return '<p class="empty">参数校验通过后显示拓扑。</p>';
+  const {net,links}=r;
+  const W=700,G=net.leaves.length,hosts=net.hosts.length,loc={},nodes=[],edges=[];
+  const visibleGroups=Math.min(G,8);
+  const x=(i,n)=>45+(i+.5)*(610/n);
+  const box=(name,id,X,Y,type,sub='')=>{
+    loc[id]={x:X,y:Y};
+    const width=type==='gpu'?Math.min(59,610/Math.max(visibleGroups,net.groupSize>8?1:net.groupSize)-6):type==='agg'?Math.min(96,610/visibleGroups-5):Math.min(98,610/visibleGroups-5);
+    const fill=type==='gpu'||type==='agg'?'#34325b':type==='host'?'#283a56':'#5148a0';
+    const stroke=type==='gpu'||type==='agg'?'#8278d4':type==='host'?'#598391':'#a8a0ff';
+    nodes.push('<g><rect x="'+(X-width/2)+'" y="'+(Y-13)+'" rx="6" width="'+width+'" height="26" fill="'+fill+'" stroke="'+stroke+'"/><text x="'+X+'" y="'+(Y+4)+'" fill="#f6f5ff" text-anchor="middle" font-size="11" font-weight="700">'+esc(name)+'</text>'+(sub?'<text x="'+X+'" y="'+(Y+28)+'" fill="#c2c9ea" text-anchor="middle" font-size="10">'+esc(sub)+'</text>':'')+'</g>');
+  };
+  const direct=c.topology==='direct', spined=net.spines.length>0, hasUp=links.some(l=>l.kind==='up');
+  const ys=spined?118:91, yg=spined?183:154,hostY=spined?68:31;
+  if(direct||hasUp)for(let i=0;i<Math.min(hosts,8);i++)box('CPU '+i,net.hosts[i],x(i,Math.min(hosts,8)),hostY,'host');
+  for(let i=0;i<net.spines.length;i++)box('Spine '+i,net.spines[i],x(i,net.spines.length),26,'switch');
+  for(let i=0;i<visibleGroups;i++)if(!direct)box('SW '+i,net.leaves[i],x(i,visibleGroups),ys,'switch');
+  const compact=c.gpus>12||G>2;
+  for(let i=0;i<visibleGroups;i++){
+    if(compact){
+      const agg='group'+i;
+      box(net.groupSize+'× GPU',agg,x(i,visibleGroups),yg,'agg','Gen'+c.gen+' x'+c.lane+' / GPU');
+      for(let j=0;j<net.groupSize;j++)loc[net.gpus[i*net.groupSize+j]]=loc[agg];
+    }else for(let j=0;j<net.groupSize;j++){
+      const k=i*net.groupSize+j;
+      box('GPU '+k,net.gpus[k],x(k,c.gpus),yg,'gpu','Gen'+c.gen+' x'+c.lane);
+    }
+  }
+  const drawn=new Set();
+  for(const e of links){
+    const a=loc[e.a],b=loc[e.b];
+    if(!a||!b)continue;
+    const key=[e.kind,a.x,a.y,b.x,b.y].join('/');
+    if(drawn.has(key))continue;
+    drawn.add(key);
+    const hot=e.util>=.75,col=hot?'#ff819b':e.kind==='gpu'?'#a69afc':'#61c4d4';
+    let path='M '+a.x+' '+a.y+' L '+b.x+' '+b.y;
+    if(e.kind==='isl'&&a.y===b.y){const apex=a.y-Math.min(42,12+Math.abs(a.x-b.x)/12);path='M '+a.x+' '+a.y+' Q '+((a.x+b.x)/2)+' '+apex+' '+b.x+' '+b.y}
+    edges.push('<path d="'+path+'" fill="none" stroke="'+col+'" stroke-width="'+(hot?2.4:1.35)+'" '+(e.kind==='bridge'?'stroke-dasharray="4 4"':'')+'><title>'+esc(e.a+' ↔ '+e.b+' · '+num(e.util*100)+'%')+' · 离线版</title></path>');
+    if(e.kind==='up'&&G<=4){
+      const offset=spined?7:12;
+      edges.push('<text x="'+((a.x+b.x)/2+offset)+'" y="'+((a.y+b.y)/2+3)+'" fill="#b9d7e6" font-size="10">'+e.count+'× Gen'+e.gen+' x'+e.lane+'</text>');
+    }
+  }
+  return '<svg viewBox="0 0 '+W+' '+(spined?220:192)+'" role="img" aria-label="'+esc(topologyNames[c.topology]+' GPU 与 Switch 连接图')+'">'+edges.join('')+nodes.join('')+'</svg>'+(G>8?'<p class="explain" style="color:#c6cde8">示意显示前 8 个分组，端口表包含全部 '+G+' 组。</p>':'');
+}
+function renderAnalysis(){
+  const c=config(),native=nativeTopology(c.template),r=calculate(c);
+  $('toponame').textContent=templateName(c)+' · '+(native?native.scaleUp:topologyNames[c.topology]);
+  $('topogen').textContent=native?'厂商原生':'Gen'+c.gen+' x'+c.lane;
+  const nativeDiagram=native?.id==='nvidia-8'&&c.nativeEthernet!==200?
+    {...native,diagram:{...native.diagram,levels:[[c.nativeEthernet+'GbE · 8× ConnectX-7'],...native.diagram.levels.slice(1)]}}:native;
+  $('diagram').innerHTML=native?referenceDiagram(nativeDiagram):diagram(c,r);
+  $('native-scope').hidden=!native;$('pcie-legend').hidden=!!native;
+  if(native)$('native-scope').innerHTML=esc(nativeNote(native.id))+' '+link(native.links[0].url,'拓扑来源');
+  if(r.errors){
+    $('kpis').innerHTML=['热点所需带宽','峰值端口利用率','Egress Buffer','P99 / P999'].map(title=>'<div class="kpi"><div class="label">'+title+'</div><strong>—</strong><div class="detail">等待有效参数</div></div>').join('');
+    $('warnings').innerHTML=r.errors.map(s=>'<p class="notice bad">'+esc(s)+'</p>').join('');
+    $('traffic').innerHTML='';$('ports').innerHTML='';return;
+  }
+  const m=r.metrics;
+  const kpi=(title,v,unit,detail,cls='',meter='')=>'<div class="kpi"><div class="label">'+title+'</div><strong class="'+cls+'">'+v+' <small>'+unit+'</small></strong><div class="detail">'+detail+'</div>'+meter+'</div>';
+  const meter=m.util===null?'':'<div class="meter '+(m.util>=75?'hot':'')+'"><i style="width:'+Math.min(100,m.util)+'%"></i></div>';
+  $('kpis').innerHTML=[
+    kpi('热点所需带宽',num(m.need),'GB/s',m.capacity===null?'容量待标定':'有效容量 '+num(m.capacity)+' GB/s'),
+    kpi('峰值端口利用率',num(m.util,1),'%',esc(r.hot.a+' ↔ '+r.hot.b),m.util>=100?'bad':m.util>=75?'warn':'',meter),
+    kpi('Egress Buffer',num(m.buffer,1),'KiB',native?'单端口 / 聚合链路等分估计':'单物理端口 · Credit BDP '+num(m.credit,1)+' KiB',m.buffer>c.buffer?'bad':''),
+    kpi('P99 / P999 估计',m.p99===null?(m.util===null?'待标定':'过载'):num(m.p99,2)+' / '+num(m.p999,2),'µs','单端口排队 + 固定路径延迟',m.p99===null&&m.util!==null?'bad':'')
+  ].join('');
+  $('warnings').innerHTML=r.notices.map(([cls,s])=>'<p class="notice '+cls+'">'+esc(s)+'</p>').join('');
+  $('traffic').innerHTML='<p class="explain">'+num(r.globalStepTokens,0)+' token / 全局步 · '+num(r.stepRate,3)+' 步/s · 总注入 '+num(m.inject)+' GB/s</p>'+table(
+    ['通信原语','峰值发送 / 卡','峰值接收 / 卡','全域注入','每全局步','未路由'],
+    Object.entries(r.rows).map(([key,row])=>tr([
+      esc(rowNames[key][0])+'<br><span class="hint">'+(key==='weights'&&c.weightWindow?
+        (native?'Host 路径待建模':'同一分片在共享链路只传一份')+' · GPU 接收需求合计 '+volume(row.rx.reduce((sum,rate)=>sum+rate,0)/1e9,'GB/s'):
+        esc(row.total?rowNames[key][1]:zeroReason(c,key)))+'</span>',
+      volume(Math.max(...row.tx)/1e9,'GB/s'),volume(Math.max(...row.rx)/1e9,'GB/s'),volume(row.total/1e9,'GB/s'),
+      volume(row.total/r.stepRate/1e9,'GB'),volume(row.blocked/1e9,'GB/s')
+    ],row.blocked?'hotrow':''))
+  );
+  renderPortTable(c,r);
+}
+function zeroReason(c,key){
+  const reasons={
+    ar:c.sp>1?'TP 由 AllGather / ReduceScatter 承担，当前无 DP 梯度 AllReduce':'TP=1 或 TP Collective 次数为 0，当前无 DP 梯度 AllReduce',
+    ag:c.tp===1?'TP=1，组内无对端':c.sp===1?'SP=1，TP 激活走 AllReduce':'TP Collective 次数为 0',
+    rs:c.tp===1?'TP=1，组内无对端':c.sp===1?'SP=1，TP 激活走 AllReduce':'TP Collective 次数为 0',
+    a2a:c.tp===1?'TP=1，组内无对端':'每层额外次数为 0。MoE 流量列在 Dispatch / Combine',
+    dispatch:c.moeLayers===0?'Dense 模型无 MoE 路由':'EP=1 或活跃层没有远程专家',
+    combine:c.moeLayers===0?'Dense 模型无 MoE 路由':'EP=1 或活跃层没有远程专家',
+    pp:c.pp===1?'PP=1，无跨 Stage 激活':'当前只有一个活跃 PP Stage',
+    weights:'加载窗口为 0，当前按权重已就绪计算',
+    kv:c.scenario==='diffusion'?'Diffusion 场景无自回归 KV 同步':c.scenario==='train'?'训练场景未启用推理 KV 迁移':'KV 同步比例与迁移速率均为 0'
+  };
+  return reasons[key];
+}
+function renderPortTable(c,r,page=0){
+  const pageSize=48,start=page*pageSize,end=Math.min(start+pageSize,r.links.length);
+  const pager=r.links.length>pageSize?'<div class="port-pager"><span>链路 '+(start+1)+'–'+end+' / '+r.links.length+'</span><button class="btn" id="ports-prev"'+(page===0?' disabled':'')+'>上一页</button><button class="btn" id="ports-next"'+(end===r.links.length?' disabled':'')+'>下一页</button></div>':'';
+  const switchTable=r.switchUsage.length?table(['Switch','已用端口 / 预算','已用 lanes / 预算'],r.switchUsage.map(s=>tr([esc(s.id),s.ports+' / '+c.switchPorts,s.lanes+' / '+c.switchLanes],s.ports>c.switchPorts||s.lanes>c.switchLanes?'hotrow':''))):'';
+  $('ports').innerHTML=pager+table(['链路','端口配置','A→B / B→A','有效容量','利用率',r.net.native?'Egress Buffer':'Buffer / Credit','P99 / P999'],r.links.slice(start,end).map(e=>tr([
+    esc(e.a+' ↔ '+e.b),e.protocol?esc((e.count>1?e.count+'× ':'')+e.label)+(e.raw===null?'':' · '+num(e.raw/e.count)+' GB/s 单向'):e.kind==='bridge'?'CPU 互连':e.count+'× Gen'+e.gen+' x'+e.lane,
+    num(e.ab/1e9)+' / '+num(e.ba/1e9)+' GB/s',e.cap===null?'待标定':num(e.cap)+' GB/s',e.util===null?'—':num(e.util*100,1)+'%',
+    (r.net.native?num(e.buffer,1):num(e.buffer,1)+' / '+(e.kind==='bridge'?'—':num(e.credit,1)))+' KiB',e.util===null?'待标定':e.p99===null?'过载':num(e.p99)+' / '+num(e.p999)+' µs'
+  ],e.util>=1?'hotrow':e.util>=.75?'warmrow':'')))+
+    (r.switchUsage.length>16?'<details class="switch-budget"><summary>Switch 端口预算 · '+r.switchUsage.length+' 颗</summary>'+switchTable+'</details>':switchTable);
+  if(pager){
+    $('ports-prev').onclick=()=>renderPortTable(c,r,page-1);
+    $('ports-next').onclick=()=>renderPortTable(c,r,page+1);
+  }
+}
+const equations=[
+  ['吞吐、并行与 Rank 放置','GPU = TP × DP × PP。EP 划分 DP，SP 在 TP 内；默认每个 DP worker 处理全域 Token/s ÷ DP。Decode 全局步 token = Batch，Prefill / Train = Batch × Seq。每 PP Stage 按整数分层，余数分给靠前 Stage。Prefill 可指定只执行前 N 层。Diffusion 将生成样本/s × 每样本 Token × Steps × Passes 转成 Denoiser Token/s。改变 Rank 放置会改变跨 Switch 流量。'],
+  ['AllReduce、AllGather、ReduceScatter 与 All2All','以 S 为完整张量字节数，n 为组大小。Ring AllReduce 每 Rank 发送 2(n−1)S/n，AllGather 和 ReduceScatter 各发送 (n−1)S/n；接收与发送等量。TP 按 Activation × Token × 层数 × 每层次数计算；训练再乘 2，表示前向与反向。SP>1 使用 TP 组内的一次 AllGather 加一次 ReduceScatter 替代每次 TP AllReduce。额外 All2All 按均衡发送 (n−1)S/n，与 MoE 独立。训练 DP 梯度按步归并，专家梯度默认仅跨同一专家副本。 '+link(sources.nccl,'NCCL Tests')],
+  ['MoE、PP 与 KV Cache','MoE 每 Rank 远程 Dispatch = (Token/s ÷ DP ÷ TP) × Hidden × Activation Bytes × Top-K × MoE 层数 × (1−1/EP)。偏斜将同一 EP 组中的一个热点目的 Rank 按权重放大，并保持每源总流量；Combine 对调方向。专家数影响可部署性及分片，均匀路由下远程比例由 EP 决定。训练 Dispatch / Combine 各乘 2。PP 相邻 Stage 发送 Activation / SP，训练双向。KV = (新增 Token/s × 同步比例 + 完整迁移序列/s × Seq Length) ÷ DP × 每层 KV 字节 × 活跃 Stage 层数 ÷ TP，发往下一个 Rank 或本地 CPU。压缩、共享或重复 KV 通过有效每层字节数校准。每步列含按工作负载步率摊销的流量。'],
+  ['权重广播 · Switch 扇出','加载速率 = 权重分片字节 ÷ 加载窗口。同一 Host 下，Dense 按 PP Stage 与 TP Rank 分组，专家权重再按 EP Rank 分组。每个分片沿从 Host 出发的树发送，共享路径只传一份，Switch 到不同分支时复制。通信表的全域注入按各 Host 出向链路汇总，GPU 接收需求按目的端汇总。不同 Host、独立出向链路及不同权重分片分别计费。适用条件为沿途 PCIe 组件支持并配置 Multicast Posted Write 与目的地址窗口。原生厂商配置中待建模的 Host 路径列入未路由。 '+link(sources.multicast,'PCI-SIG Multicast')],
+  ['链路、端口与容量','Gen6 x16 线速为 128 GB/s 每方向，Gen5 x16 按 32 GT/s × 16 ÷ 8 × 128/130。有效容量 = 单向速率 × 并行链路数 × Payload 效率；效率包含剩余协议、实现和背景流量损耗。CPU Bridge 输入为可用带宽。优先使用 PCIe Switch 路径，允许中转时才走 CPU 备选路径；等长路径按路径数均分。流量逐跳累加，按 max(TX,RX) ÷ 容量计算利用率。聚合链路假设流可均分。Switch 预算仅计建模链路，跨主机链路、NIC / SSD 与协议可达性按实际配置核验。 '+link(sources.pcie,'PCI-SIG')],
+  ['Buffer 与 P99 / P999','每物理端口 Egress 积压 = max(0, 最热方向需求 × 突发倍率 − 有效容量) × 突发窗口 ÷ 并行口数。Credit BDP = 每口有效容量 × Credit RTT，单独列示，未估算 Replay/VOQ 或片上池实际分配。尾延估计 = 路径跳数 × 每跳固定延迟 + [−ln(1−p) × 有效服务单元 / (单口有效容量 × (1−利用率))]。采用单瓶颈 M/M/1 假设，各端口取最差值。过载时无有限稳态估计。该数值对应端口服务单元，需用相同口径数据校准。'],
+  ['厂商原生互联','使用 NVLink、HCCS、UB 和 Ethernet/RDMA 的公开拓扑与单向端口速率。跨机流量由对应 Rail 或 Plane 路由，等长路径均分。同域优先使用机内互联。表中的原生链路容量为标称单向速率 × Payload 效率。Host 装载路径、外部对端及协议特有的拥塞与延迟需按部署标定。'],
+  ['验证范围','理论筛查用于估算网络预算。GPU HBM、CCL 算法、PCIe Read Completion / Replay、Switch 内部 Crossbar、ACS / IOMMU、链路协商降级、拓扑真实布线与端到端算子时延需独立验证。验证页记录工具版本、来源、结果与结论。 '+link(sources.simai,'SimAI')+' · '+link(sources.astra,'Astra-sim')]
+];
+$('formula-body').innerHTML=equations.map(([k,v],i)=>'<details '+(i===0?'open':'')+'><summary>'+esc(k)+'</summary><p>'+v+'</p></details>').join('');
+function setTabs(id,key,value){
+  $(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset[key]===value)));
+}
+function renderCompare(){
+  setTabs('compare-tabs','mode',compareMode);
+  $('compare-title').textContent=compareMode==='native'?'厂商原生组网对比':'理论结果横向对比';
+  if(compareMode==='native'){renderNativeComparison();return}
+  const c=config();
+  let entries;
+  if(compareMode==='model')entries=Object.keys(modelPresets).filter(k=>k!=='custom'&&!!modelPresets[k].diffusion===(c.scenario==='diffusion')).map(k=>[modelPresets[k].label,withModel(c,k)]);
+  else if(compareMode==='scenario')entries=Object.keys(scenarioLabels).filter(k=>c.model==='custom'||(k==='diffusion')===!!modelPresets[c.model].diffusion).map(k=>[scenarioLabels[k],k===c.scenario?c:withScenario(c,k)]);
+  else entries=templates.map(t=>[t.name,withTemplate(c,t)]);
+  entries.unshift(['当前输入',c]);
+  $('comparison').innerHTML='<p class="explain">'+({
+    model:'在同类负载下比较模型，使用当前集群与吞吐。Dense 模型的 EP 自动设为 1。',
+    scenario:'固定模型与集群。非当前场景采用其默认 Batch、Seq、Token/s、SP、KV 比例和权重窗口。',
+    cluster:'固定模型与场景。卡数变化时自动匹配并行因子，具体配置见表。'
+  })[compareMode]+'</p>'+table(['方案','GPU','TP / EP / DP / PP / SP','吞吐','热点需求','有效容量','利用率','Buffer','P99 / P999','理论结论','操作'],entries.map(([name,x],i)=>{
+    const r=calculate(x),m=r.metrics;
+    const values=m?[num(m.need)+' GB/s',num(m.capacity)+' GB/s',m.util===null?'—':num(m.util,1)+'%',num(m.buffer,1)+' KiB',m.p99===null?(m.util===null?'待标定':'过载'):num(m.p99)+' / '+num(m.p999)+' µs',esc(r.verdict)+(m.blocked>0?' · 有不可达':'')]:['—','—','—','—','—','<span title="'+esc(r.errors.join(' '))+'">参数不匹配</span>'];
+    return tr([esc(name),x.gpus,[x.tp,x.ep,x.dp,x.pp,x.sp].join(' / '),num(x.tps,3)+(x.scenario==='diffusion'?' 样本/s':' Token/s'),...values,i===0?'—':'<button class="linkbtn" data-entry="'+i+'">载入</button>'],m&&r.verdict==='有约束超限'?'hotrow':m&&r.verdict==='需核查'?'warmrow':'');
+  }));
+  $('comparison').querySelectorAll('[data-entry]').forEach(b=>b.onclick=()=>{setConfig(entries[Number(b.dataset.entry)][1]);navigate('analysis')});
+}
+function showReference(id){
+  const reference=clusterTopologies.find(item=>item.id===id);
+  templateLibrary='native';
+  $('cluster-size').value=String(reference.gpus);
+  $('cluster-vendor').value=reference.vendor;
+  navigate('templates');
+}
+function renderNativeComparison(){
+  const rows=clusterTopologies.map(t=>tr([t.gpus+' 卡',esc(t.vendor),esc(t.name),
+    esc(t.level),esc(t.scaleUp),esc(t.scaleOut),'<button class="linkbtn" data-reference="'+t.id+'">拓扑与端口 →</button>']));
+  $('comparison').innerHTML='<p class="explain">原生组网规格与分配示例。查看端口方向、带宽口径及来源可打开对应拓扑。</p>'+
+    table(['规模','厂商','配置','依据','Scale-up','机外 / Scale-out','详情'],rows);
+  $('comparison').querySelectorAll('[data-reference]').forEach(b=>b.onclick=()=>showReference(b.dataset.reference));
+}
+function referenceDiagram(t){
+  const {levels,mesh,pairedPlanes,pair,planes}=t.diagram;
+  const W=460,H=mesh?205:levels.length*47+12;
+  const points=levels.map((layer,i)=>layer.map((name,j)=>({name,x:(j+.5)*W/layer.length,y:25+i*47,w:Math.min(layer.length===1?300:180,W/layer.length-12)})));
+  const edges=[];
+  const line=(a,b,color)=>'<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="'+color+'" stroke-width="1.3"/>';
+  const colors=['#77d4df','#9f96ff'];
+  if(mesh){
+    const center={x:230,y:128};
+    const circle=Array.from({length:8},(_,i)=>({x:Math.round(center.x+75*Math.cos((i+.5)*Math.PI/4)),y:Math.round(center.y+65*Math.sin((i+.5)*Math.PI/4))}));
+    for(let i=0;i<circle.length;i++)for(let j=i+1;j<circle.length;j++)edges.push(line(circle[i],circle[j],'#6d67b7'));
+    for(const [i,p] of circle.entries())edges.push('<circle cx="'+p.x+'" cy="'+p.y+'" r="11" fill="#403976" stroke="#aaa0ff"/><text x="'+p.x+'" y="'+(p.y+4)+'" text-anchor="middle" fill="#fff" font-size="10">'+i+'</text>');
+    points.splice(1);
+  }else for(let i=1;i<points.length;i++){
+    points[i-1].forEach((a,j)=>points[i].forEach((b,k)=>{
+      if((pairedPlanes||planes)&&points[i-1].length===points[i].length&&j!==k)return;
+      if(pair&&i===1&&Math.floor(j/2)!==k)return;
+      edges.push(line(a,b,colors[(pair?j%2:(planes||pairedPlanes)?j%2:i-1)%2]));
+    }));
+  }
+  const boxes=points.flat().map(({name,x,y,w})=>'<g><rect x="'+(x-w/2)+'" y="'+(y-13)+'" width="'+w+'" height="26" rx="5" fill="#302e54" stroke="#8178c4"/><text x="'+x+'" y="'+(y+4)+'" text-anchor="middle" fill="#f6f4ff" font-size="'+(w<110?10:12)+'" font-weight="650">'+esc(name)+'</text></g>');
+  return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(t.name)+' 原生拓扑示意">'+edges.join('')+boxes.join('')+'</svg>';
+}
+function renderTemplates(){
+  setTabs('template-tabs','library',templateLibrary);
+  const native=templateLibrary==='native';
+  $('template-filters').hidden=!native;
+  $('report-link').hidden=native;
+  $('template-cards').classList.toggle('native-grid',native);
+  if(native){
+    const size=$('cluster-size').value,vendor=$('cluster-vendor').value;
+    $('template-cards').innerHTML=clusterTopologies.filter(t=>(size==='all'||Number(size)===t.gpus)&&(vendor==='all'||vendor===t.vendor)).map(t=>{
+      return '<article class="card templatecard native-card"><div class="tags"><span class="pill">'+esc(t.vendor)+' · '+t.gpus+' 卡</span><span class="pill">'+esc(t.level)+'</span></div><h2>'+esc(t.name)+'</h2>'+
+        '<div class="native-diagram">'+referenceDiagram(t)+'</div><dl><dt>Scale-up</dt><dd>'+esc(t.scaleUp)+'</dd><dt>机外链路</dt><dd>'+esc(t.scaleOut)+'</dd></dl>'+
+        '<p>'+esc(t.ports)+'</p><p>'+esc(t.detail)+'</p><p class="native-links">'+t.links.map(l=>link(l.url,l.name)).join(' · ')+'</p><button class="btn" data-native="'+t.id+'">按原生拓扑分析 →</button></article>';
+    }).join('');
+    return;
+  }
+  $('template-cards').innerHTML=templates.map(t=>{
+    const c=t.config;
+    return '<article class="card templatecard"><div class="tags"><span class="pill">'+esc(t.level)+'</span></div><h2>'+esc(t.name)+'</h2><div class="tags"><span class="pill">'+c.gpus+' GPU</span><span class="pill">Gen'+c.gen+' x'+c.lane+'</span><span class="pill">'+esc(topologyNames[c.topology])+'</span></div><p>'+esc(t.detail)+'</p><p>'+esc(t.io)+'</p><p>'+link(t.source,'配置来源')+'</p><button class="btn" data-template="'+t.id+'">应用模板 →</button></article>';
+  }).join('');
+}
+function evidenceFields(){
+  $('evidence-form').innerHTML=
+    '<label class="field">记录类型<select name="kind">'+opt('simulation','仿真')+opt('measured','实测')+opt('theory','理论补充')+'</select></label>'+
+    '<label class="field">工具 / 方法<select name="method"></select></label>'+
+    '<label class="field">记录名称<input name="title" required maxlength="120" placeholder="例如 EP4 Decode · Run 01"></label>'+
+    '<label class="field">版本 / 环境<input name="environment" maxlength="200" placeholder="工具 commit、固件、CCL 或采样范围"></label>'+
+    '<label class="field">指标<select name="metric">'+Object.entries(metricLabels).map(([k,v])=>opt(k,v)).join('')+'</select></label>'+
+    '<label class="field">结果值<input name="value" type="number" min="0" max="1000000000000" step="any" required></label>'+
+    '<label class="field wide">引用来源<input name="source" required maxlength="1000" placeholder="URL、日志路径、测试报告编号或引用说明"></label>'+
+    '<label class="field wide">结论与口径<textarea name="note" rows="3" maxlength="4000" placeholder="消息大小、样本数、统计对象，以及与理论值的差异"></textarea></label>'+
+    '<button class="btn primary">保存验证结果</button>';
+  const form=$('evidence-form');
+  const update=()=>{
+    const methods={simulation:['SimAI','Astra-sim','其他仿真'],measured:['硬件实测','CCL Benchmark','现场遥测'],theory:['手工推导','第三方推导']};
+    form.elements.method.innerHTML=methods[form.elements.kind.value].map(k=>opt(k,k)).join('');
+  };
+  form.elements.kind.addEventListener('change',update);update();
+}
+function snapshot(r){return {...r.metrics}}
+function renderEvidence(){
+  setTabs('evidence-tabs','kind',evidenceKind);
+  const c=config(),r=calculate(c);
+  $('binding').textContent='当前绑定 · '+modelName(c)+' / '+scenarioLabels[c.scenario]+' / '+templateName(c);
+  const current=evidenceKind==='all'||evidenceKind==='theory'?'<article class="record"><div class="recordhead"><span class="pill theory">理论推导</span><strong>当前输入快照</strong></div><p>'+esc(modelName(c)+' · '+scenarioLabels[c.scenario]+' · '+templateName(c))+'</p><p>'+(r.errors?esc(r.errors.join(' ')):'热点需求 '+num(r.metrics.need)+' GB/s · 利用率 '+num(r.metrics.util)+'% · P99 '+metricText(r.metrics,'p99')+' µs · '+esc(r.verdict))+'</p></article>':'';
+  const records=state.evidence.filter(e=>evidenceKind==='all'||e.kind===evidenceKind).slice().reverse();
+  $('evidence-list').innerHTML=current+(records.length?records.map(e=>{
+    const b=e.metrics[e.metric],delta=b===null||b===undefined?'':', 差值 '+(e.value>=b?'+':'')+num(e.value-b);
+    return '<article class="record"><div class="recordhead"><span class="pill '+e.kind+'">'+kindNames[e.kind]+' · '+esc(e.method)+'</span><strong>'+esc(e.title)+'</strong><time>'+stamp(e.at)+'</time></div><p>'+esc(modelName(e.config)+' · '+scenarioLabels[e.config.scenario]+' · '+templateName(e.config))+'</p><p><strong>'+esc(metricLabels[e.metric])+' '+num(e.value)+'</strong> · 录入时理论值 '+metricText(e.metrics,e.metric)+delta+'</p>'+
+      (e.environment?'<p>环境 '+esc(e.environment)+'</p>':'')+'<p>来源 '+(safeLink(e.source)?link(e.source,e.source):esc(e.source))+'</p>'+(e.note?'<p>'+esc(e.note)+'</p>':'')+
+      '<button class="linkbtn" data-evidence-load="'+e.id+'">载入参数快照</button></article>';
+  }).join(''):'<p class="empty">此筛选下暂无已录入的验证结果。</p>');
+}
+const fieldLabels=Object.fromEntries(fields.flatMap(([, , list])=>list.map(([key,label])=>[key,label])));
+function renderHistory(){
+  const vs=state.versions.slice().reverse();
+  if(!vs.length){$('version-diff').innerHTML='<p class="empty">保存至少两个版本后可比较。</p>';$('version-list').innerHTML='<p class="empty">还没有保存的版本。</p>';return}
+  if(!vs.some(v=>v.id===versionA))versionA=vs[1]?.id??vs[0].id;
+  if(!vs.some(v=>v.id===versionB))versionB=vs[0].id;
+  if(vs.length<2)$('version-diff').innerHTML='<p class="empty">再保存一个版本即可比较。</p>';
+  else{
+    const a=vs.find(v=>v.id===versionA),b=vs.find(v=>v.id===versionB);
+    const options=vs.map(v=>opt(v.id,v.title)).join('');
+    const showValue=(key,v)=>esc(key==='model'?modelPresets[v]?.label:key==='scenario'?scenarioLabels[v]:key==='template'?(nativeTopology(v)?.name??templateBy(v)?.name??customTemplateName):typeof v==='boolean'?(v?'开启':'关闭'):v);
+    const diffs=Object.keys({...fieldLabels,model:'模型',scenario:'场景',template:'集群模板'}).filter(k=>a.config[k]!==b.config[k]);
+    $('version-diff').innerHTML='<div class="diff-select"><label class="field">基准版本<select id="version-a">'+options+'</select></label><label class="field">对比版本<select id="version-b">'+options+'</select></label></div>'+
+      '<div class="scroll">'+table(['指标','基准','对比','差值'],Object.entries(metricLabels).map(([k,l])=>tr([esc(l),metricText(a.metrics,k),metricText(b.metrics,k),a.metrics[k]===null||b.metrics[k]===null?'—':num(b.metrics[k]-a.metrics[k])])))+
+      (diffs.length?table(['改动参数','基准','对比'],diffs.map(k=>tr([esc(fieldLabels[k]??{model:'模型',scenario:'场景',template:'集群模板'}[k]),showValue(k,a.config[k]),showValue(k,b.config[k])]))):'<p class="empty">两个版本的参数相同。</p>')+'</div>';
+    $('version-a').value=versionA;$('version-b').value=versionB;
+    $('version-a').onchange=(e)=>{versionA=e.target.value;renderHistory()};
+    $('version-b').onchange=(e)=>{versionB=e.target.value;renderHistory()};
+  }
+  $('version-list').innerHTML=vs.map(v=>'<article class="record"><div class="recordhead"><span class="pill theory">理论快照</span><strong>'+esc(v.title)+'</strong><time>'+stamp(v.at)+'</time></div><p>'+esc(modelName(v.config)+' · '+scenarioLabels[v.config.scenario]+' · '+templateName(v.config))+'</p>'+
+    (v.note?'<p>'+esc(v.note)+'</p>':'')+'<button class="linkbtn" data-version-load="'+v.id+'">恢复输入</button><button class="linkbtn" data-version-compare="'+v.id+'">设为对比版本</button></article>').join('');
+}
+function normalize(data,strict=false){
+  if(!data||typeof data!=='object'||!data.config||!Array.isArray(data.versions)||!Array.isArray(data.evidence))throw new Error('无效工作区 JSON');
+  const getConfig=(raw)=>{
+    if(!raw||typeof raw!=='object')throw new Error('快照参数缺失');
+    const next=Object.fromEntries(Object.keys(defaults).map(k=>[k,Object.hasOwn(raw,k)?raw[k]:defaults[k]]));
+    if(clusterTopologies.some(t=>t.id===next.template))next.template=customTemplateId;
+    if(!Object.hasOwn(modelPresets,next.model)||!Object.hasOwn(scenarioLabels,next.scenario)||(next.template!==customTemplateId&&!templateBy(next.template)&&!nativeTopology(next.template)))throw new Error('未知模型、场景或模板');
+    return next;
+  };
+  const clean=(row,isEvidence)=>{
+    if(!row||!Number.isFinite(row.at)||Math.abs(row.at)>8.64e15||typeof row.id!=='string'||!/^[a-zA-Z0-9-]{1,60}$/.test(row.id)||typeof row.title!=='string')throw new Error('记录元数据无效');
+    const cfg=getConfig(row.config);
+    if(validate(cfg).length)throw new Error('快照参数无效');
+    const metrics=Object.fromEntries(Object.keys(metricLabels).map(k=>{
+      const v=row.metrics?.[k];
+      if(v!==null&&(!Number.isFinite(v)||v<0))throw new Error('快照指标无效');
+      return [k,v];
+    }));
+    const base={id:row.id,at:row.at,title:row.title.slice(0,120),note:String(row.note??'').slice(0,4000),config:cfg,metrics};
+    if(!isEvidence)return base;
+    if(!Object.hasOwn(kindNames,row.kind)||!Object.hasOwn(metricLabels,row.metric)||!Number.isFinite(row.value)||row.value<0)throw new Error('验证记录指标无效');
+    return {...base,kind:row.kind,metric:row.metric,value:row.value,source:String(row.source??'').slice(0,1000),method:String(row.method??'').slice(0,80),environment:String(row.environment??'').slice(0,200)};
+  };
+  const cfg=getConfig(data.config);
+  if(strict&&data.schema!==1)throw new Error('无法识别备份版本');
+  return {config:cfg,versions:data.versions.map(v=>clean(v,false)),evidence:data.evidence.map(e=>clean(e,true))};
+}
+$('model').innerHTML=Object.entries(modelPresets).map(([k,m])=>opt(k,m.label)).join('');
+$('template').innerHTML='<optgroup label="PCIe 服务器与基线">'+templates.map(t=>opt(t.id,t.name)).join('')+'</optgroup>'+
+  '<optgroup label="厂商原生组网">'+clusterTopologies.map(t=>opt('native:'+t.id,t.vendor+' · '+t.name)).join('')+'</optgroup>';
+$('report-link').href=report;
+$('params').innerHTML=fields.map(([title,open,list,hint,group])=>'<details '+(group?'data-group="'+group+'" ':'')+(open?'open':'')+'><summary>'+esc(title)+'</summary><div class="fields">'+list.map(f=>field(f,config()[f[0]])).join('')+'</div>'+
+  (hint==='model'?'<p id="model-note" class="hint"></p>':hint?'<p '+(title==='工作负载'?'id="workload-hint" ':'')+'class="hint">'+esc(hint)+'</p>':'')+'</details>').join('');
+syncFields();evidenceFields();
+$('params').addEventListener('submit',e=>e.preventDefault());
+$('params').addEventListener('input',e=>{
+  const el=e.target,key=el.name;
+  if(!Object.hasOwn(defaults,key))return;
+  config()[key]=el.type==='checkbox'?el.checked:el.type==='number'?(el.value===''?null:el.valueAsNumber):(['gen','lane','upGen','upLane','islGen','islLane','nativeEthernet'].includes(key)?Number(el.value):el.value);
+  persist();clearTimeout(recalc);recalc=setTimeout(renderAnalysis,90);
+});
+$('model').onchange=e=>setConfig(withModel(config(),e.target.value));
+$('scenario').onchange=e=>setConfig(withScenario(config(),e.target.value));
+$('template').onchange=e=>setConfig(nativeTopology(e.target.value)?withNative(config(),e.target.value):withTemplate(config(),templateBy(e.target.value)));
+$('reset').onclick=()=>{setConfig(defaults);toast('当前参数已恢复默认值。')};
+$('show-formulas').onclick=()=>{$('formulas').querySelectorAll('details').forEach(d=>d.open=true);$('formulas').scrollIntoView({behavior:'smooth'})};
+$('compare-tabs').onclick=e=>{if(e.target.dataset.mode){compareMode=e.target.dataset.mode;renderCompare()}};
+$('evidence-tabs').onclick=e=>{if(e.target.dataset.kind){evidenceKind=e.target.dataset.kind;renderEvidence()}};
+$('template-tabs').onclick=e=>{if(e.target.dataset.library){templateLibrary=e.target.dataset.library;renderTemplates()}};
+$('cluster-size').onchange=renderTemplates;
+$('cluster-vendor').onchange=renderTemplates;
+$('template-cards').onclick=e=>{
+  const nativeId=e.target.dataset.native;
+  if(nativeId){setConfig(withNative(config(),'native:'+nativeId));navigate('analysis');return}
+  const t=templateBy(e.target.dataset.template);
+  if(t){setConfig(withTemplate(config(),t));navigate('analysis');toast('已应用 '+t.name)}
+};
+document.querySelector('nav').onclick=e=>{const b=e.target.closest('[data-page]');if(b)navigate(b.dataset.page)};
+$('evidence-list').onclick=e=>{
+  const row=state.evidence.find(v=>v.id===e.target.dataset.evidenceLoad);
+  if(row){setConfig(row.config);navigate('analysis')}
+};
+$('version-list').onclick=e=>{
+  const loadId=e.target.dataset.versionLoad,compareId=e.target.dataset.versionCompare;
+  if(loadId){const row=state.versions.find(v=>v.id===loadId);if(row){setConfig(row.config);navigate('analysis');toast('已恢复版本 '+row.title)}}
+  if(compareId){versionB=compareId;renderHistory();$('version-diff').scrollIntoView({behavior:'smooth'})}
+};
+$('evidence-form').onsubmit=e=>{
+  e.preventDefault();
+  const r=calculate(config());if(r.errors){toast('请先修正参数面板中的输入。');return}
+  const data=Object.fromEntries(new FormData(e.currentTarget));
+  if(!data.title.trim()||!data.source.trim()){toast('请填写记录名称与引用来源。');return}
+  state.evidence.push({...data,value:Number(data.value),id:crypto.randomUUID(),at:Date.now(),config:{...config()},metrics:snapshot(r)});
+  e.currentTarget.elements.title.value='';e.currentTarget.elements.value.value='';e.currentTarget.elements.note.value='';
+  evidenceKind=data.kind;persist();renderEvidence();toast('已保存验证结果与理论快照。');
+};
+function saveDialog(){
+  const r=calculate(config());if(r.errors){toast('请先修正参数面板中的输入。');return}
+  $('version-form').elements.title.value=modelName(config())+' · '+scenarioLabels[config().scenario]+' · v'+(state.versions.length+1);
+  $('version-form').elements.note.value='';$('save-dialog').showModal();
+}
+$('save').onclick=saveDialog;$('history-save').onclick=saveDialog;$('cancel-save').onclick=()=>$('save-dialog').close();
+$('version-form').onsubmit=e=>{
+  e.preventDefault();
+  const r=calculate(config());if(r.errors){toast('请先修正参数面板中的输入。');return}
+  const {title,note}=Object.fromEntries(new FormData(e.currentTarget));
+  if(!title.trim()){toast('请输入版本名称。');return}
+  const id=crypto.randomUUID();
+  state.versions.push({id,at:Date.now(),title:title.trim(),note:note.slice(0,4000),config:{...config()},metrics:snapshot(r)});
+  versionB=id;persist();$('save-dialog').close();render();toast('已保存版本 '+title.trim());
+};
+$('export').onclick=()=>{
+  const url=URL.createObjectURL(new Blob([JSON.stringify({schema:1,...state},null,2)],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download='pcie6-scaleup-workspace.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+$('import').onclick=()=>$('file').click();
+$('file').onchange=async e=>{
+  const file=e.target.files[0];e.target.value='';if(!file)return;
+  try{
+    const incoming=normalize(JSON.parse(await file.text()),true);
+    const merge=(old,next)=>[...new Map([...old,...next].map(row=>[row.id,row])).values()];
+    state={config:incoming.config,versions:merge(state.versions,incoming.versions),evidence:merge(state.evidence,incoming.evidence)};
+    persist();syncFields();render();toast('已载入备份参数并合并历史与验证记录。');
+  }catch(err){toast('导入失败。'+err.message)}
+};
+mountHardware($('hardware'));
+openPage(location.hash.slice(1));
+if(storageError)toast('无法读取浏览器保存的工作区，已打开默认参数。');
+
+return {  };
+})();
+</script>
+</body></html>

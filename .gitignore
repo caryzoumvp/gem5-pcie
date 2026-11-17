@@ -38,3 +38,4 @@ configs/dram/lowp_sweep.cfg
 .vscode
 typings
 .DS_Store
+docs/pcie_switch/pcie_sw_databook.pdf

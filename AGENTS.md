@@ -178,3 +178,90 @@ Concrete sources:
 `https://www.mail-archive.com/gem5-dev%40gem5.org/`,
 `https://www.mail-archive.com/gem5-users%40gem5.org/`, and
 `https://www.gem5.org/`.
+
+## PCIe 6.0 switch project
+
+Source precedence for this project is:
+
+1. `docs/pcie_switch/PCI-Express-Base-Specification-Revision-6.0.pdf`:
+   normative protocol behavior.
+2. `docs/pcie_switch/PCIe6_Scaleup_Lab_Offline.html`: simulation features,
+   inputs, sizing, outputs, and reference behavior.
+3. `docs/pcie_switch/pcie_sw_databook.pdf`: supplementary controller detail.
+
+When HTML simplifies the protocol, label the approximation and retain a
+reference mode; never let it override the Base Specification. Databook
+interface replication is optional and must not expand initial lab scope.
+Retain competitor-driven specs as supplementary requirements (requirements
+section 11 and Appendix A), with sources, measurement boundaries, and
+explicit target profiles. They do not override protocol rules or lab defaults.
+
+Read these design documents before implementing the switch:
+
+1. `docs/pcie_switch/PCIe6_Switch_Requirements.md`: requirements and IDs.
+2. `docs/pcie_switch/PCIe6_Switch_Architecture.md`: hardware decomposition.
+3. `docs/pcie_switch/PCIe6_Simulation_Architecture.md`: gem5 implementation
+   contracts, fidelity levels, milestones, and acceptance criteria.
+
+This is a proposed gem5 timing model, not an existing PCIe 6.0 implementation.
+Use gem5's event queue and existing PCI configuration infrastructure. Keep
+protocol transaction identity separate from gem5 packets and workload IDs.
+Do not implement PCIe by merely changing a generic bridge's bandwidth.
+
+Start with standalone synthetic endpoints, one transparent switch, and
+explicit Read/Write semantics. SimAI integration, full-system enumeration,
+NTB, multicast, INC, and other protocols are staged extensions. Unsupported
+features must be rejected or explicitly marked as abstracted in results.
+
+Keep finite queues, resource ownership, retry behavior, ordering, and
+completion semantics explicit in `pcie6_timing`. The `lab_reference` mode
+retains HTML approximations, including timed credit recovery and queue peak
+comparison; it is not protocol evidence. No silent congestion drops,
+duplicate completion, or second independent event clock in the timing model.
+Gen6 shared flow control must be covered before claiming detailed FLIT
+fidelity; a dedicated-credit approximation must be labeled accordingly.
+
+### Document ownership
+
+Requirements define intent; hardware architecture defines modeled resources;
+simulation architecture defines implementation and verification in gem5.
+Keep requirement IDs stable. Write design prose in Chinese, matching the
+existing documents. Preserve the offline HTML as a reference estimator unless
+asked to change it. Do not treat browser estimates as calibration evidence.
+
+### Evidence and scope
+
+All architecture modules and implementation paths are proposals until source
+and tests exist. Mark numerical values as standard facts, design assumptions,
+targets, calculated budgets, or measured results. Record measurement boundaries.
+144 lanes, three slices, 3 MiB SRAM, and sub-100 ns core latency are exploration
+points or targets; they are not validated implementation specifications.
+
+Use the supplied PCI Express Base Specification Revision 6.0 for protocol
+rules, recording section and printed page. Check relevant errata/ECNs before
+claiming compliance. The supplied DWC switch databook is version 5.71a,
+May 2020, at `docs/pcie_switch/pcie_sw_databook.pdf`. Use its controller/
+application contracts (RADM, XADM, CDM, TRGT1, XALI, DBI, Appendix P) as
+structural references, not as Gen6 protocol authority. Keep controller RX
+queues/replay separate from application SRAM/staging. Requirements F-23
+through F-32 are supplementary refinements; pin/beat fidelity is optional.
+Follow the lab requirements first for the simulation feature scope.
+Do not copy proprietary databook text or diagrams into source or public docs.
+
+Keep PCIe FLITs, internal fabric cells, SRAM sectors, and application chunks
+separate. Distinguish dedicated/shared external credits, internal resource
+reservations, and TX replay storage. Do not substitute Ethernet PFC/RDMA or
+CXL semantics for PCIe. Mesh/Clos connectivity alone does not establish a
+legal transparent PCIe hierarchy.
+
+### Review checklist
+
+- State timing-port ownership, request/response retry, and posted-write
+  adaptation explicitly.
+- State each buffer's allocation, ownership transfer, and release event.
+- Specify Read segmentation, Completion assembly, Tag lifetime, ordering,
+  and forward-progress assumptions.
+- Separate L1 approximations from L2 FLIT protocol coverage.
+- Keep proposed file names and commands distinct from existing assets.
+- Pair milestones with observable acceptance criteria and requirement IDs.
+- Run `git diff --check`; documentation edits do not require a simulator build.
