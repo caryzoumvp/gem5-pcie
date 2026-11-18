@@ -76,6 +76,127 @@ V-05固定Completer分段策略以测试Tag/重组，不要求所有合法Comple
 无容量仍接受、未释放就返信用、重传重复交付、retry重复写、同Tick双grant。
 能检测对应缺陷后再信任Green；编译失败不替代语义Red。
 
+### M2-01 请求与 Completion 单元场景
+
+首批采用 DW 对齐、全字节有效的普通 MemRd/MemWr，MPS=256 B，
+MRRS=4096 B。分段和重组的整数与数据逐项精确对照。以下地址为字节地址。
+
+| 子例 | 刺激 | 独立 expected |
+|---|---|---|
+| V-03a | Read 4096 B，首地址 0x1FFC | 4 B@0x1FFC 与 4092 B@0x2000，每条请求各自在一个 4 KiB 页内 |
+| V-04a | Write 516 B，首地址 0x1FFC | 4 B@0x1FFC、256 B@0x2000、256 B@0x2100；网络 Cpl 数为 0 |
+| V-05a | Read 512 B，首地址 0x1000，RCB=128 | 固定两片 256 B，Byte Count 512/256，Tag 只在第二片后释放 |
+| V-05b | Read 512 B，首地址 0x1020，RCB=128 | 96 B@0x1020、256 B@0x1080、160 B@0x1180，Byte Count 512/416/160，Lower Address 0x20/0/0 |
+| V-06a | V-05b 首片后重送首片，或注入错误身份、Byte Count、Lower Address 与非 RCB 切点 | 不修改已收数据和 Tag；随后合法片仍能完成一次 |
+| V-06b | V-05b 首片后返回无数据的 CA，Byte Count=416，Lower Address=0 | 只产生一个失败终止并归还重组空间与 Tag 额度；迟到片归为非预期 |
+| V-07a | 两个 Function 分别占用 Tag 7；以逆序返回；另在第一个 Function 用不同 TC 再尝试 Tag 7 | 跨 Function 可同时占用；同 Function 重复占用拒绝；每片只修改匹配的请求 |
+| V-08a | 请求方设为 Root Complex 或 Endpoint，分别声明 RCB 64/128 | Root Complex 两档通过；Endpoint 仅 128 通过 |
+
+成功重组的数据使用数组模式 `byte[i] = i & 0xff`。每片前后记录
+Tag 占用、保留的 Completion 字节额度及父请求终止次数。V-05b 的分段
+是一个合法接收样例，Completer 可选择其他满足 RCB/MPS 的分段。
+V-06a 的错误报告与保留等待是本单元的处理合同，整机还需验证错误收束
+和超时后的资源处理。
+
+依据本地 PCI Express Base Specification Rev. 6.0，MPS 见 §2.2.2
+（印刷页141–142），MRRS/4 KiB 见 §2.2.7（162–163），身份与 Tag
+见 §2.2.6.2（153–159），Completion 字段见 §2.2.9.1（196–197），
+RCB、分片顺序和状态见 §2.3.1.1（214–218），非预期匹配见 §2.3.2
+（219–220）。暂定单元目标为 `pcie_request.test`，后续由带端点和
+Link 的 gem5 测试验证完整事件路径。
+
+### M2-02 有限 Link 的逐跳信用子例
+
+V-13a 将一个 VC 的相同流控类别配置为 H=1、D=2，线宽为
+16 B/周期、周期为 10 tick，单向传播 7 tick，信用更新延迟 11 tick。
+在 tick 0 发送只携带 17 B 有效数据的 32 B 测试传输，占用 2 个 D
+单位。发送端在 tick 20 可再次使用串行资源，接收端在 tick 27 才能
+看到数据。故意卡住接收端至 tick 40，确认 tick 20–39 仍因 FC 阻塞。
+接收端在 tick 40 释放，发送端在 tick 51 才可重新发包。每一步检查
+可用、在途、占用、返回在途四项的 H/D 整数之和。测试传输服务开销
+和非 DW 对齐数据用于单独验证流控额度，协议分段由 V-03–V-08 覆盖。
+
+V-13b 用独立的方向和类别确认同方向类别共享串行服务，反方向可并行。
+超配置窗口的请求应明确拒绝，重复释放和未知 handle 不改变账本。
+M2 使用配置初始化后的 dedicated-credit TLP 模型。FC 单位见本地
+Base Spec Rev. 6.0 §2.6.1（印刷页236–242）。FLIT 的 Shared FC、
+更新编码和组粒度留待 M3 验收。
+
+### M2-03 核心资源和排序单元用例
+
+- V-11a 使用 2 descriptors、2 sectors、2 VOQ 索引、64 B/sector。
+  一笔 65 B 写占 2 sectors，下一笔 1 B 请求因空间不足被拒绝，
+  整数占用不变。此后无数据的请求可占剩余 descriptor 和索引。
+- V-11b 在同 VOQ 预留两笔事务，先 commit 一笔再 cancel 另一笔。
+  第二个 VOQ 只有在首笔 release 后可分配。分别拒绝已 commit 的
+  cancel、未 commit 的 release、重复操作和已退休 token。
+- V-11c 给 P 和 Cpl 各留一个 descriptor、sector 和索引。压力下 NP
+  无法消费这些保留量，P 和 Cpl 仍可分配。释放后保留额度继续有效。
+- V-10a 在同入口、partition 和 TC 暂停 NP，后到 P 和 Cpl 仍 eligible。
+  反向把早到 P 卡住时，后到 P/NP/Cpl 均不 eligible，直到该 P
+  的最后字节从出口串行器发出。不同 TC 独立检查。
+- V-10b 两片同 Requester+Tag 的 Cpl 依次就绪时只能按顺序提交，
+  不同 Requester 的同数值 Tag 可以独立前进。排序收束后账本为空。
+
+上述为单元判据。V-10/V-11 的整机验收还需实际 VOQ、Fabric、staging、
+出口竞争和资源释放事件。排序依据 Base Spec §2.4.1 Table 2-42
+（印刷页222–224）。
+
+### M2-04 数据面联合授权子例
+
+V-12a 连续三笔单 Cell 写入同一出口。每入口 core 只有一个
+descriptor，出口只有一个 Cell 暂存，发送端模拟下游无信用。
+完成首笔 Fabric 服务后，仅首笔占用暂存，第二笔留在 core，
+第三笔留在 RX 并持续占用链路信用。出口恢复后，三笔依序进入
+输出 Link，各发一次，RX、core、staging 及排序引用归零。
+
+V-12b 接入两段有限信用 Link 和目标内存。下游冻结到 tick 200，
+出口信用 H=1/D=2，入口 H=2/D=4。六笔 32 B 写入时，源应在
+恢复前耗尽信用且目的内存可见的事务为零。恢复后按 1–6 顺序
+提交，读回 192 B 并比较数据，两段 Link 及交换器全部排空。
+
+V-14a 在两个入口以 1R/1W bank 和独立出口驱动两个事务。两个
+bank 和两个 Fabric 通道时可以同沿授权。只保留一个 Fabric
+通道时，第二笔等待首笔释放，已分配的暂存与 bank 不会被
+未授权请求占用。测试以 10 tick 为周期，单 Cell 读写各一周期。
+
+V-21a 同 tick 产生链路到达、释放及唤醒时合并处理，下一周期边沿
+才读更新后的状态。正常路径的一个 transfer 只做一次 RX 释放、
+Fabric grant、出口提交与排序退休。
+
+### M2-05/06 原生 Packet 与级联子例
+
+V-15a/V-25a 在一颗及两颗交换器的链路上发送 516 B 跨页 Write，
+并在同 tick 发第二笔 16 B Write。配置 outstanding=1。
+第二笔首次必须收到 false，且只有 Request retry 才可重新发出。
+接收端故意拒绝第一个 WriteResp 一次，10 个周期后发 Response retry。
+预期两笔 Write 只产生两个源接管响应，四个 MemWr 分片只在末端提交
+一次。500 周期后读回 516 B，比较完整 payload，ReadResp 恰好一个。
+另检查关闭注入后 Link、SwitchCore 和外部 Packet 状态归零。
+每跳精确核对 4 个 MemWr、2 个 MemRd 及 3 个 CplD。输出 JSON
+分别记录源接管响应、目的写可见和读完成 tick。
+
+V-22a 在两颗拓扑的第一笔 Write 仍在途时调用 gem5 drain。已接管
+的三片必须到达末端并完成资源归还。尚未接管的第二笔仍由测试驱动
+持有，恢复模拟后才 retry，最终全链路为空。
+
+### S-08 原生 8→1 与容量扰动
+
+八路 Requester 同时起跑，每路使用独立地址范围、数据模式和 Tag 额度。
+单颗与两颗以每类 H=1、D=8 运行，目标第一次接收后冻结 250 周期。
+在 tick 150000 查询目标 RX、信用阻塞和等待依赖，要求尚无写可见，
+且最终所有 Packet、Link credit、core 与 staging 所有权归零。
+
+两颗额外使用相同 32 B 流量对照 1 与 64 Cell 暂存，首交换器的各
+入口依赖独立，可看出共享出口暂存的容量差异。每路 3 个 MemWr、
+2 个 MemRd 和 2 个 CplD，应为每跳 56 次授权和发送。标准 516 B
+版本应为每跳 128 次。一格场景最多保持一格在首交换器热点出口。
+
+单路 64 B 与两级 4 KiB 各自逐字节读回，独立预期每跳 7 与 44 个
+TLP。4 KiB 子例缩小为 1 Tag、1 descriptor、4 sectors 和 1 个
+Fabric 通道。排空后 functional 读比较目标字节，映射外 atomic
+检查必须返回错误且没有 Link 传输或性能计数。
+
 ## 4. expected、时间和覆盖合同
 
 - 数据、身份、错误状态、分段字节及容量整数精确比较；浮点/时间量化

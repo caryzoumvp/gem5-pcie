@@ -1,6 +1,6 @@
 # PCIe 6.0 Switch 仿真实施计划
 
-版本：v1.0｜日期：2026-11-18｜状态：M0/M1 已通过本地验收。
+版本：v1.0｜日期：2026-11-18｜状态：M0–M2 已通过本地阶段验收。
 依据[需求v1.1](PCIe6_Switch_Requirements.md)、
 [硬件架构](PCIe6_Switch_Architecture.md)与
 [仿真架构](PCIe6_Simulation_Architecture.md)。本文件是阶段依赖、任务与
@@ -39,7 +39,7 @@ M3/M4是完整目标的重要后续工作；M5按明确范围单独验收，不�
 |---|---|---|---|
 | M0 | 本地验收完成 | 63字段/结构/来源合同与21项测试通过；记录见validation/M0.md | F-01/04/08/09，T-01 |
 | M1 | 已验收 | sizing与JSON对照、S-01–S-07参考回归 | F-02/07/19/20/21，T-02/03 |
-| M2 | 未开始 | 有限单颗/级联、数据/资源守恒、S-08排空 | F-03/06/17/22，A-01至A-04/07，T-04 |
+| M2 | 已验收 | 有限单颗/级联、数据/资源守恒、S-08排空 | F-03/06/17/22，A-01至A-04/07，T-04 |
 | M3 | 未开始 | 所选Gen6条款及周期资源/时钟trace验收通过，冻结cycle profile | F-01/02/06/19，T-05 |
 | M4 | 未开始 | 已验收gem5周期模型接入SimAI、collective/DAG闭环与结果导入 | B-01/05/06，F-09/20/21/22，T-06 |
 | M5 | 未开始 | 按extension逐项满足入口与测试合同 | F-05/10至F-16/18/23至F-32，T-07至T-10 |
@@ -122,6 +122,27 @@ gem5 对照保留两项观测。M1-04 参考运行入口与 M1-05 TestLib 对照
 | M2-05 | Packet adapter、retry、drain | 请求/响应重试不双提交；源可复用与目的可见分开；drain后数据正确 |
 | M2-06 | 单颗/两颗级联configs与TestLib | request/Completion路径、慢出口反压上溯、停发后排空 |
 | M2-07 | metrics/trace与差异报告 | 资源峰值、stall、事务/应用时间戳、未完成/超时；解释与参考结果差异 |
+
+M2-01 的首批 DW 对齐 TLP 用例先用空桩取得八个语义 Red。
+`pcie_request.test` 的单元实现覆盖请求分段、Completer 分段和
+Requester 重组、分 Function Tag 额度及 Completion 缓冲预留。
+原生端点与 Link 已接入带多个 Requester 和一个目标地址窗口的
+透明链式运行时。
+
+M2-02/03 已增加独立的 Link、core admission 和 ordering 单元实现。
+逐方向 Link 按 VC/类别跟踪可用、在途、RX 占用和返回在途的 H/D，
+释放事件后到达发送端的更新才可再次消耗。核心 ledger 每入口原子
+持有 descriptor、payload sector 和活动 VOQ 索引，并保护 P/Cpl
+预留。Ordering 模型按入口/partition/TC 及 Completion 身份维护依赖。
+M2-04 将这些组件接入 C++ SwitchCore，RX 到 core 写入完成后才
+归还 RX 信用；仲裁在同一次授权内占用 read bank、Fabric 通道和出口暂存。
+测试连接实际 Link、SwitchCore 与 EndpointMemory，在有限输出
+信用阻塞时观测反压上溯，恢复后核对完整 payload 并排空。
+M2-05/06 的 `PcieTiming` 在 gem5 主队列运行单颗和两颗拓扑。
+Packet 拒绝时保留发送者所有权，已接管 Posted Write 的源响应与
+后续目的内存提交分别记录。Native driver 检查双向 retry、跨页数据
+和在途 drain。S-08 覆盖原生 8→1、目标暂停、一格暂存对照、64 B
+和 4 KiB 及受限内部资源。详见 [M2验收记录](validation/M2.md)。
 
 最小实验集：单Read/Write、双向、64B与4KiB、8→1、steady/burst、
 小Tag/credit/descriptor/pool/egress、端口/Fabric瓶颈和级联返回路径。
