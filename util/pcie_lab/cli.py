@@ -24,7 +24,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Validate an experiment and emit an M0 contract, never a simulation result."""
+"""Validate an experiment and optionally size the offline lab profile."""
 
 import argparse
 import json
@@ -32,12 +32,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .calibration import (
+    export_calibration,
+    split_document,
+)
 from .contracts import (
     ConfigError,
     compile_experiment,
     make_result,
     source_hashes,
 )
+from .sizing import size_hardware
 
 
 def repository_metadata(root):
@@ -66,9 +71,20 @@ def repository_metadata(root):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", type=Path, help="experiment JSON")
+    parser.add_argument(
+        "input", type=Path, help="experiment or calibration JSON"
+    )
     parser.add_argument(
         "--root", type=Path, required=True, help="gem5 source root"
+    )
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument(
+        "--size", action="store_true", help="include analytical lab sizing"
+    )
+    output.add_argument(
+        "--export-calibration",
+        action="store_true",
+        help="emit the legacy hardware calibration JSON",
     )
     args = parser.parse_args(argv)
     try:
@@ -83,16 +99,37 @@ def main(argv=None):
                 "source_mismatch",
                 "source snapshot changed; audit and update the manifest/lock first",
             )
-        experiment = compile_experiment(document, sources=sources)
+        spec, imported = split_document(document)
+        experiment = compile_experiment(spec, sources=sources)
         result = make_result(experiment)
-        result["producer"] = repository_metadata(args.root)
+        producer = repository_metadata(args.root)
+        result["producer"] = producer
+        if imported is not None:
+            result["imported_calibration"] = imported
+        if args.export_calibration and imported is not None:
+            result = imported
+        elif args.size or args.export_calibration:
+            if experiment["execution_mode"] != "lab_reference":
+                raise ConfigError(
+                    "execution_mode",
+                    "reference_only",
+                    "analytical sizing requires lab_reference",
+                )
+            sizing = size_hardware(experiment["effective_inputs"])
+            if args.export_calibration:
+                result = export_calibration(experiment, sizing, producer)
+            else:
+                result["reference_sizing"] = sizing
+        serialized = json.dumps(
+            result, ensure_ascii=False, indent=2, allow_nan=False
+        )
     except (OSError, ValueError) as error:
         diagnostic = {"status": "invalid", "message": str(error)}
         if isinstance(error, ConfigError):
             diagnostic.update(field=error.field, code=error.code)
         print(json.dumps(diagnostic, ensure_ascii=False), file=sys.stderr)
         return 2
-    print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+    print(serialized)
     return 0
 
 

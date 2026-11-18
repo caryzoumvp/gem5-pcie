@@ -1,0 +1,4077 @@
+{
+    "source_sha256":
+        "7b9ab025838c33d90ec62e8d9482172a4086de71c7fbecb2d9499e7057cce804",
+    "cases": {
+        "read64": {
+            "inputs": {},
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 222,
+                            "actualD": 0,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 222,
+                            "actualD": 0,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 2,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 500,
+                "ideal": 500,
+                "trackDepth": 1024,
+                "trackBits": 75,
+                "tagPerFunction": 500,
+                "portCapacity": 224.4,
+                "portWidth": 2112,
+                "nominalPortWidth": 2112,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        99.36842105263158
+                    ],
+                    [
+                        "Replay 窗口",
+                        99.36842105263158
+                    ],
+                    [
+                        "端口数据面",
+                        99.73333333333333
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.60000000000002
+                    ],
+                    [
+                        "可用 Tag",
+                        196.608
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        417.06666666666666
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 99.36842105263158,
+                "voqNeed": 1224,
+                "voqDepth": 2048,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 5308416,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 2048,
+                "fabricSlots": 105,
+                "busyFabric": 432,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ]
+                ],
+                "trackBytes": 11520,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "read4k": {
+            "inputs": {
+                "payload": 4096
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 4096,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 112.71641791044776,
+                        "portCeiling": 113.63555555555554,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 112.71641791044776,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 4,
+                            "d": 0,
+                            "actualH": 4,
+                            "actualD": 0,
+                            "fcCeiling": 177.12432432432433,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 31.25,
+                            "tlp": 0.5,
+                            "cellRate": 0.03125
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 56,
+                            "d": 888,
+                            "actualH": 56,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 16,
+                            "maxCells": 5,
+                            "burstCells": 700,
+                            "rate": 500,
+                            "tlp": 134,
+                            "cellRate": 2.5
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 112.71641791044776,
+                        "portCeiling": 113.63555555555554,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 112.71641791044776,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 4,
+                            "d": 0,
+                            "actualH": 4,
+                            "actualD": 0,
+                            "fcCeiling": 177.12432432432433,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 31.25,
+                            "tlp": 0.5,
+                            "cellRate": 0.03125
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 56,
+                            "d": 888,
+                            "actualH": 56,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 16,
+                            "maxCells": 5,
+                            "burstCells": 700,
+                            "rate": 500,
+                            "tlp": 134,
+                            "cellRate": 2.5
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 0.03125,
+                "qBytes": 16,
+                "aBytes": 4288,
+                "qCells": 1,
+                "aCells": 80,
+                "inFlight": 8,
+                "ideal": 8,
+                "trackDepth": 16,
+                "trackBits": 75,
+                "tagPerFunction": 8,
+                "portCapacity": 159.79999999999998,
+                "portWidth": 1504,
+                "nominalPortWidth": 1504,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        112.71641791044776
+                    ],
+                    [
+                        "Replay 窗口",
+                        112.71641791044776
+                    ],
+                    [
+                        "端口数据面",
+                        113.63555555555554
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.60000000000002
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        988.6024691358024
+                    ],
+                    [
+                        "可用 Tag",
+                        12582.912
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 112.71641791044776,
+                "voqNeed": 700,
+                "voqDepth": 1024,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 2654208,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 1024,
+                "fabricSlots": 105,
+                "busyFabric": 182.25,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ]
+                ],
+                "trackBytes": 180,
+                "maxPayload": 4096,
+                "sramScale": 1.125
+            }
+        },
+        "read4k512": {
+            "inputs": {
+                "payload": 4096,
+                "mrrs": 512
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 512,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            }
+                        ]
+                    },
+                    {
+                        "size": 512,
+                        "addr": 512,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            }
+                        ]
+                    },
+                    {
+                        "size": 512,
+                        "addr": 1024,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            }
+                        ]
+                    },
+                    {
+                        "size": 512,
+                        "addr": 1536,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            }
+                        ]
+                    },
+                    {
+                        "size": 512,
+                        "addr": 2048,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            }
+                        ]
+                    },
+                    {
+                        "size": 512,
+                        "addr": 2560,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            }
+                        ]
+                    },
+                    {
+                        "size": 512,
+                        "addr": 3072,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            }
+                        ]
+                    },
+                    {
+                        "size": 512,
+                        "addr": 3584,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    },
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    },
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    },
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    },
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    },
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    },
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    },
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 112.71641791044776,
+                        "portCeiling": 113.63555555555554,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 112.71641791044776,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 28,
+                            "d": 0,
+                            "actualH": 28,
+                            "actualD": 0,
+                            "fcCeiling": 154.9837837837838,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 250,
+                            "tlp": 4,
+                            "cellRate": 0.25
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 56,
+                            "d": 888,
+                            "actualH": 56,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 16,
+                            "maxCells": 5,
+                            "burstCells": 700,
+                            "rate": 500,
+                            "tlp": 134,
+                            "cellRate": 2.5
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 112.71641791044776,
+                        "portCeiling": 113.63555555555554,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 112.71641791044776,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 28,
+                            "d": 0,
+                            "actualH": 28,
+                            "actualD": 0,
+                            "fcCeiling": 154.9837837837838,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 250,
+                            "tlp": 4,
+                            "cellRate": 0.25
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 56,
+                            "d": 888,
+                            "actualH": 56,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 16,
+                            "maxCells": 5,
+                            "burstCells": 700,
+                            "rate": 500,
+                            "tlp": 134,
+                            "cellRate": 2.5
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 0.03125,
+                "qBytes": 128,
+                "aBytes": 4288,
+                "qCells": 8,
+                "aCells": 80,
+                "inFlight": 63,
+                "ideal": 8,
+                "trackDepth": 128,
+                "trackBits": 75,
+                "tagPerFunction": 63,
+                "portCapacity": 159.79999999999998,
+                "portWidth": 1504,
+                "nominalPortWidth": 1504,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        112.71641791044776
+                    ],
+                    [
+                        "Replay 窗口",
+                        112.71641791044776
+                    ],
+                    [
+                        "端口数据面",
+                        113.63555555555554
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.60000000000002
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        909.9636363636363
+                    ],
+                    [
+                        "可用 Tag",
+                        1572.864
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 112.71641791044776,
+                "voqNeed": 700,
+                "voqDepth": 1024,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 2654208,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 1024,
+                "fabricSlots": 105,
+                "busyFabric": 198,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ]
+                ],
+                "trackBytes": 1440,
+                "maxPayload": 512,
+                "sramScale": 1.125
+            }
+        },
+        "write64": {
+            "inputs": {
+                "op": "write"
+            },
+            "expected": {
+                "read": false,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 64,
+                            "tlp": 80,
+                            "credits": 4,
+                            "cells": 2
+                        },
+                        "completions": []
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 64,
+                        "tlp": 80,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "completions": [],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 94.4,
+                        "portCeiling": 95.19999999999999,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 94.4,
+                        "forward": {
+                            "name": "P / MemWr",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1263,
+                            "rate": 2000,
+                            "tlp": 160,
+                            "cellRate": 4
+                        },
+                        "reverse": null
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 94.4,
+                        "portCeiling": 95.19999999999999,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 94.4,
+                        "forward": {
+                            "name": "P / MemWr",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1263,
+                            "rate": 2000,
+                            "tlp": 160,
+                            "cellRate": 4
+                        },
+                        "reverse": null
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 2,
+                "qBytes": 80,
+                "aBytes": 0,
+                "qCells": 2,
+                "aCells": 0,
+                "inFlight": null,
+                "ideal": null,
+                "trackDepth": null,
+                "trackBits": 75,
+                "tagPerFunction": null,
+                "portCapacity": 214.2,
+                "portWidth": 2016,
+                "nominalPortWidth": 2016,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        94.4
+                    ],
+                    [
+                        "Replay 窗口",
+                        94.4
+                    ],
+                    [
+                        "端口数据面",
+                        95.19999999999999
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.60000000000002
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        625.5999999999999
+                    ],
+                    [
+                        "可用 Tag",
+                        null
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 94.4,
+                "voqNeed": 1263,
+                "voqDepth": 2048,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 5308416,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 2048,
+                "fabricSlots": 105,
+                "busyFabric": 288,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ]
+                ],
+                "trackBytes": 0,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "fanIn": {
+            "inputs": {
+                "reqPorts": 8,
+                "target": 25
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 8,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 44,
+                            "d": 0,
+                            "actualH": 44,
+                            "actualD": 0,
+                            "fcCeiling": 30.443243243243245,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 390.625,
+                            "tlp": 6.25,
+                            "cellRate": 0.390625
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 44,
+                            "d": 174,
+                            "actualH": 44,
+                            "actualD": 174,
+                            "fcCeiling": 30.0972972972973,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 0,
+                            "rate": 390.625,
+                            "tlp": 29.6875,
+                            "cellRate": 0.78125
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 8,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 12.421052631578947,
+                        "portCeiling": 12.466666666666667,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 12.421052631578947,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 347,
+                            "d": 0,
+                            "actualH": 347,
+                            "actualD": 0,
+                            "fcCeiling": 30.010810810810813,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 784,
+                            "rate": 3125,
+                            "tlp": 50,
+                            "cellRate": 3.125
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 347,
+                            "d": 1388,
+                            "actualH": 347,
+                            "actualD": 1388,
+                            "fcCeiling": 30.010810810810813,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 2349,
+                            "rate": 3125,
+                            "tlp": 237.5,
+                            "cellRate": 6.25
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 0.390625,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 98,
+                "ideal": 98,
+                "trackDepth": 128,
+                "trackBits": 75,
+                "tagPerFunction": 98,
+                "portCapacity": 224.4,
+                "portWidth": 2112,
+                "nominalPortWidth": 2112,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        12.421052631578947
+                    ],
+                    [
+                        "Replay 窗口",
+                        12.421052631578947
+                    ],
+                    [
+                        "端口数据面",
+                        12.466666666666667
+                    ],
+                    [
+                        "Credit 窗口",
+                        30.010810810810813
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        52.13333333333333
+                    ],
+                    [
+                        "可用 Tag",
+                        196.608
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 12.421052631578947,
+                "voqNeed": 2349,
+                "voqDepth": 4096,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 10616832,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 4096,
+                "fabricSlots": 105,
+                "busyFabric": 675,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 25 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ],
+                    [
+                        "warn",
+                        "单入口 Payload 池小于热点 VOQ 突发估算。"
+                    ]
+                ],
+                "trackBytes": 1440,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "limitedTags": {
+            "inputs": {
+                "tagBits": 5,
+                "tagBudget": 32
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 222,
+                            "actualD": 0,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 222,
+                            "actualD": 0,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 2,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 500,
+                "ideal": 500,
+                "trackDepth": 1024,
+                "trackBits": 70,
+                "tagPerFunction": 500,
+                "portCapacity": 224.4,
+                "portWidth": 2112,
+                "nominalPortWidth": 2112,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "可用 Tag",
+                        8.192
+                    ],
+                    [
+                        "FLIT / TLP 与链路切割",
+                        99.36842105263158
+                    ],
+                    [
+                        "Replay 窗口",
+                        99.36842105263158
+                    ],
+                    [
+                        "端口数据面",
+                        99.73333333333333
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.60000000000002
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        417.06666666666666
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 99.36842105263158,
+                "voqNeed": 1224,
+                "voqDepth": 2048,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 5308416,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 2048,
+                "fabricSlots": 105,
+                "busyFabric": 432,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 可用 Tag。"
+                    ],
+                    [
+                        "bad",
+                        "实际 MemRd 并发需要 500 Tag/Function，超过已配置的 32。"
+                    ]
+                ],
+                "trackBytes": 10368,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "oneHeaderCredit": {
+            "inputs": {
+                "headerCredits": 1
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 1,
+                            "actualD": 0,
+                            "fcCeiling": 0.6918918918918919,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 1,
+                            "actualD": 888,
+                            "fcCeiling": 0.6918918918918919,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 1,
+                            "actualD": 0,
+                            "fcCeiling": 0.6918918918918919,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 1,
+                            "actualD": 888,
+                            "fcCeiling": 0.6918918918918919,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 2,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 500,
+                "ideal": 500,
+                "trackDepth": 1024,
+                "trackBits": 75,
+                "tagPerFunction": 500,
+                "portCapacity": 224.4,
+                "portWidth": 2112,
+                "nominalPortWidth": 2112,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "Credit 窗口",
+                        0.6918918918918919
+                    ],
+                    [
+                        "FLIT / TLP 与链路切割",
+                        99.36842105263158
+                    ],
+                    [
+                        "Replay 窗口",
+                        99.36842105263158
+                    ],
+                    [
+                        "端口数据面",
+                        99.73333333333333
+                    ],
+                    [
+                        "可用 Tag",
+                        196.608
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        417.06666666666666
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 99.36842105263158,
+                "voqNeed": 1224,
+                "voqDepth": 2048,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 5308416,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 2048,
+                "fabricSlots": 105,
+                "busyFabric": 432,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 Credit 窗口。"
+                    ]
+                ],
+                "trackBytes": 11520,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "narrowPort": {
+            "inputs": {
+                "portWidth": 256
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 12.088888888888889,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 222,
+                            "actualD": 0,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 906,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1906,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 12.088888888888889,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 222,
+                            "actualD": 0,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 906,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1906,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 2,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 500,
+                "ideal": 500,
+                "trackDepth": 1024,
+                "trackBits": 75,
+                "tagPerFunction": 500,
+                "portCapacity": 27.2,
+                "portWidth": 256,
+                "nominalPortWidth": 2112,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "端口数据面",
+                        12.088888888888889
+                    ],
+                    [
+                        "FLIT / TLP 与链路切割",
+                        99.36842105263158
+                    ],
+                    [
+                        "Replay 窗口",
+                        99.36842105263158
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.60000000000002
+                    ],
+                    [
+                        "可用 Tag",
+                        196.608
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        417.06666666666666
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 99.36842105263158,
+                "voqNeed": 1906,
+                "voqDepth": 2048,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 5308416,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 2048,
+                "fabricSlots": 105,
+                "busyFabric": 432,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 端口数据面。"
+                    ],
+                    [
+                        "warn",
+                        "单入口 Payload 池小于热点 VOQ 突发估算。"
+                    ]
+                ],
+                "trackBytes": 11520,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "smallEgress": {
+            "inputs": {
+                "reqPorts": 8,
+                "target": 25,
+                "egressCells": 1
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 8,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 44,
+                            "d": 0,
+                            "actualH": 44,
+                            "actualD": 0,
+                            "fcCeiling": 30.443243243243245,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 390.625,
+                            "tlp": 6.25,
+                            "cellRate": 0.390625
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 44,
+                            "d": 174,
+                            "actualH": 44,
+                            "actualD": 174,
+                            "fcCeiling": 30.0972972972973,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 0,
+                            "rate": 390.625,
+                            "tlp": 29.6875,
+                            "cellRate": 0.78125
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 8,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 12.421052631578947,
+                        "portCeiling": 12.466666666666667,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 12.421052631578947,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 347,
+                            "d": 0,
+                            "actualH": 347,
+                            "actualD": 0,
+                            "fcCeiling": 30.010810810810813,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 784,
+                            "rate": 3125,
+                            "tlp": 50,
+                            "cellRate": 3.125
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 347,
+                            "d": 1388,
+                            "actualH": 347,
+                            "actualD": 1388,
+                            "fcCeiling": 30.010810810810813,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 2349,
+                            "rate": 3125,
+                            "tlp": 237.5,
+                            "cellRate": 6.25
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 0.390625,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 98,
+                "ideal": 98,
+                "trackDepth": 128,
+                "trackBits": 75,
+                "tagPerFunction": 98,
+                "portCapacity": 224.4,
+                "portWidth": 2112,
+                "nominalPortWidth": 2112,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        12.421052631578947
+                    ],
+                    [
+                        "Replay 窗口",
+                        12.421052631578947
+                    ],
+                    [
+                        "端口数据面",
+                        12.466666666666667
+                    ],
+                    [
+                        "Credit 窗口",
+                        30.010810810810813
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        52.13333333333333
+                    ],
+                    [
+                        "可用 Tag",
+                        196.608
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 12.421052631578947,
+                "voqNeed": 2349,
+                "voqDepth": 4096,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 10616832,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 1,
+                "fabricSlots": 105,
+                "busyFabric": 675,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 25 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ],
+                    [
+                        "warn",
+                        "单入口 Payload 池小于热点 VOQ 突发估算。"
+                    ],
+                    [
+                        "warn",
+                        "出口暂存小于突发估算。"
+                    ]
+                ],
+                "trackBytes": 1440,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "pageBoundary": {
+            "inputs": {
+                "offset": 4092,
+                "payload": 520,
+                "cplSplit": "rcb",
+                "rcb": 128
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 4,
+                        "addr": 4092,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 4,
+                                "tlp": 16,
+                                "credits": 1,
+                                "cells": 1
+                            }
+                        ]
+                    },
+                    {
+                        "size": 516,
+                        "addr": 4096,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 128,
+                                "tlp": 140,
+                                "credits": 8,
+                                "cells": 3
+                            },
+                            {
+                                "size": 128,
+                                "tlp": 140,
+                                "credits": 8,
+                                "cells": 3
+                            },
+                            {
+                                "size": 128,
+                                "tlp": 140,
+                                "credits": 8,
+                                "cells": 3
+                            },
+                            {
+                                "size": 128,
+                                "tlp": 140,
+                                "credits": 8,
+                                "cells": 3
+                            },
+                            {
+                                "size": 4,
+                                "tlp": 16,
+                                "credits": 1,
+                                "cells": 1
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    },
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 4,
+                        "tlp": 16,
+                        "credits": 1,
+                        "cells": 1
+                    },
+                    {
+                        "size": 128,
+                        "tlp": 140,
+                        "credits": 8,
+                        "cells": 3
+                    },
+                    {
+                        "size": 128,
+                        "tlp": 140,
+                        "credits": 8,
+                        "cells": 3
+                    },
+                    {
+                        "size": 128,
+                        "tlp": 140,
+                        "credits": 8,
+                        "cells": 3
+                    },
+                    {
+                        "size": 128,
+                        "tlp": 140,
+                        "credits": 8,
+                        "cells": 3
+                    },
+                    {
+                        "size": 4,
+                        "tlp": 16,
+                        "credits": 1,
+                        "cells": 1
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 103.64864864864865,
+                        "portCeiling": 105.23809523809524,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 103.64864864864865,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 55,
+                            "d": 0,
+                            "actualH": 55,
+                            "actualD": 0,
+                            "fcCeiling": 154.5945945945946,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 492.3076923076923,
+                            "tlp": 7.876923076923077,
+                            "cellRate": 0.49230769230769234
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 164,
+                            "d": 929,
+                            "actualH": 164,
+                            "actualD": 929,
+                            "fcCeiling": 153.6025437201908,
+                            "maxD": 8,
+                            "maxCells": 3,
+                            "burstCells": 1026,
+                            "rate": 1476.923076923077,
+                            "tlp": 145.72307692307692,
+                            "cellRate": 3.4461538461538463
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 103.64864864864865,
+                        "portCeiling": 105.23809523809524,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 103.64864864864865,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 55,
+                            "d": 0,
+                            "actualH": 55,
+                            "actualD": 0,
+                            "fcCeiling": 154.5945945945946,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 492.3076923076923,
+                            "tlp": 7.876923076923077,
+                            "cellRate": 0.49230769230769234
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 164,
+                            "d": 929,
+                            "actualH": 164,
+                            "actualD": 929,
+                            "fcCeiling": 153.6025437201908,
+                            "maxD": 8,
+                            "maxCells": 3,
+                            "burstCells": 1026,
+                            "rate": 1476.923076923077,
+                            "tlp": 145.72307692307692,
+                            "cellRate": 3.4461538461538463
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 0.24615384615384617,
+                "qBytes": 32,
+                "aBytes": 592,
+                "qCells": 2,
+                "aCells": 14,
+                "inFlight": 124,
+                "ideal": 62,
+                "trackDepth": 256,
+                "trackBits": 75,
+                "tagPerFunction": 124,
+                "portCapacity": 204,
+                "portWidth": 1920,
+                "nominalPortWidth": 1920,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        103.64864864864865
+                    ],
+                    [
+                        "Replay 窗口",
+                        103.64864864864865
+                    ],
+                    [
+                        "端口数据面",
+                        105.23809523809524
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.6025437201908
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        635.375
+                    ],
+                    [
+                        "可用 Tag",
+                        798.72
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 103.64864864864865,
+                "voqNeed": 1026,
+                "voqDepth": 2048,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 5308416,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 2048,
+                "fabricSlots": 105,
+                "busyFabric": 283.5692307692308,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ]
+                ],
+                "trackBytes": 2880,
+                "maxPayload": 516,
+                "sramScale": 1.125
+            }
+        },
+        "unalignedMps": {
+            "inputs": {
+                "offset": 4,
+                "payload": 512
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 512,
+                        "addr": 4,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 252,
+                                "tlp": 264,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 256,
+                                "tlp": 268,
+                                "credits": 16,
+                                "cells": 5
+                            },
+                            {
+                                "size": 4,
+                                "tlp": 16,
+                                "credits": 1,
+                                "cells": 1
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 252,
+                        "tlp": 264,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 256,
+                        "tlp": 268,
+                        "credits": 16,
+                        "cells": 5
+                    },
+                    {
+                        "size": 4,
+                        "tlp": 16,
+                        "credits": 1,
+                        "cells": 1
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 110.24817518248175,
+                        "portCeiling": 112.0969696969697,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 110.24817518248175,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 28,
+                            "d": 0,
+                            "actualH": 28,
+                            "actualD": 0,
+                            "fcCeiling": 154.9837837837838,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 250,
+                            "tlp": 4,
+                            "cellRate": 0.25
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 84,
+                            "d": 916,
+                            "actualH": 84,
+                            "actualD": 916,
+                            "fcCeiling": 153.64193284193286,
+                            "maxD": 16,
+                            "maxCells": 5,
+                            "burstCells": 783,
+                            "rate": 750,
+                            "tlp": 137,
+                            "cellRate": 2.75
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 110.24817518248175,
+                        "portCeiling": 112.0969696969697,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 110.24817518248175,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 28,
+                            "d": 0,
+                            "actualH": 28,
+                            "actualD": 0,
+                            "fcCeiling": 154.9837837837838,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 0,
+                            "rate": 250,
+                            "tlp": 4,
+                            "cellRate": 0.25
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 84,
+                            "d": 916,
+                            "actualH": 84,
+                            "actualD": 916,
+                            "fcCeiling": 153.64193284193286,
+                            "maxD": 16,
+                            "maxCells": 5,
+                            "burstCells": 783,
+                            "rate": 750,
+                            "tlp": 137,
+                            "cellRate": 2.75
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 0.25,
+                "qBytes": 16,
+                "aBytes": 548,
+                "qCells": 1,
+                "aCells": 11,
+                "inFlight": 63,
+                "ideal": 63,
+                "trackDepth": 128,
+                "trackBits": 75,
+                "tagPerFunction": 63,
+                "portCapacity": 173.4,
+                "portWidth": 1632,
+                "nominalPortWidth": 1632,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        110.24817518248175
+                    ],
+                    [
+                        "Replay 窗口",
+                        110.24817518248175
+                    ],
+                    [
+                        "端口数据面",
+                        112.0969696969697
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.64193284193286
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        834.1333333333333
+                    ],
+                    [
+                        "可用 Tag",
+                        1572.864
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 110.24817518248175,
+                "voqNeed": 783,
+                "voqDepth": 1024,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 2654208,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 1024,
+                "fabricSlots": 105,
+                "busyFabric": 216,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ]
+                ],
+                "trackBytes": 1440,
+                "maxPayload": 512,
+                "sramScale": 1.125
+            }
+        },
+        "cascade": {
+            "inputs": {
+                "switches": 3,
+                "islLanes": 8,
+                "retimers": 1,
+                "rttMode": "fixed",
+                "fixedRtt": 1
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 12.5,
+                        "creditRtt": 205,
+                        "ackRtt": 205,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 57.42222222222222,
+                        "replayNeed": 123,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 246,
+                            "d": 0,
+                            "actualH": 246,
+                            "actualD": 0,
+                            "fcCeiling": 153.6,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 552,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 246,
+                            "d": 984,
+                            "actualH": 246,
+                            "actualD": 984,
+                            "fcCeiling": 153.6,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1552,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 12.5,
+                        "creditRtt": 205,
+                        "ackRtt": 205,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 57.42222222222222,
+                        "replayNeed": 123,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 246,
+                            "d": 0,
+                            "actualH": 246,
+                            "actualD": 0,
+                            "fcCeiling": 153.6,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 552,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 246,
+                            "d": 984,
+                            "actualH": 246,
+                            "actualD": 984,
+                            "fcCeiling": 153.6,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1552,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    },
+                    {
+                        "key": "isl",
+                        "name": "每段级联链路",
+                        "lanes": 8,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 64,
+                        "tlp": 59,
+                        "linkDelay": 12.5,
+                        "creditRtt": 205,
+                        "ackRtt": 205,
+                        "wireCeiling": 49.68421052631579,
+                        "portCeiling": 57.42222222222222,
+                        "replayNeed": 62,
+                        "replay": 64,
+                        "replayCeiling": 49.68421052631579,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 246,
+                            "d": 0,
+                            "actualH": 246,
+                            "actualD": 0,
+                            "fcCeiling": 153.6,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 552,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 246,
+                            "d": 984,
+                            "actualH": 246,
+                            "actualD": 984,
+                            "fcCeiling": 153.6,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1612,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        100
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        360
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 580,
+                "rtt": 1,
+                "oneWay": 50,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 2,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 2,
+                "ideal": 2,
+                "trackDepth": 4,
+                "trackBits": 75,
+                "tagPerFunction": 2,
+                "portCapacity": 129.2,
+                "portWidth": 1216,
+                "nominalPortWidth": 1216,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        49.68421052631579
+                    ],
+                    [
+                        "Replay 窗口",
+                        49.68421052631579
+                    ],
+                    [
+                        "端口数据面",
+                        57.42222222222222
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.6
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        417.06666666666666
+                    ],
+                    [
+                        "可用 Tag",
+                        49152
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 49.68421052631579,
+                "voqNeed": 1612,
+                "voqDepth": 2048,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 5308416,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 2048,
+                "fabricSlots": 105,
+                "busyFabric": 432,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ],
+                    [
+                        "warn",
+                        "手动 RTT 小于链路与 Switch 往返之和。仿真仍会计入传播与穿越延迟。"
+                    ]
+                ],
+                "trackBytes": 45,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "explicitResources": {
+            "inputs": {
+                "headerCredits": 3,
+                "dataCredits": 1,
+                "replayFlits": 3,
+                "portWidth": 320,
+                "fabricWidth": 960,
+                "egressCells": 3,
+                "voqDepth": 3,
+                "poolKiB": 1,
+                "requestLimit": 40,
+                "cplLimit": 30
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 15.11111111111111,
+                        "replayNeed": 111,
+                        "replay": 3,
+                        "replayCeiling": 3.2227596017069704,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 3,
+                            "actualD": 1,
+                            "fcCeiling": 2.075675675675676,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 882,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 3,
+                            "actualD": 1,
+                            "fcCeiling": 0.17297297297297298,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1882,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 15.11111111111111,
+                        "replayNeed": 111,
+                        "replay": 3,
+                        "replayCeiling": 3.2227596017069704,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 3,
+                            "actualD": 1,
+                            "fcCeiling": 2.075675675675676,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 882,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 3,
+                            "actualD": 1,
+                            "fcCeiling": 0.17297297297297298,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1882,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 2,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 500,
+                "ideal": 500,
+                "trackDepth": 1024,
+                "trackBits": 75,
+                "tagPerFunction": 500,
+                "portCapacity": 34,
+                "portWidth": 320,
+                "nominalPortWidth": 2112,
+                "fabricWidth": 960,
+                "fabricCapacity": 918,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "Credit 窗口",
+                        0.17297297297297298
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        1.92
+                    ],
+                    [
+                        "发起端请求率",
+                        2.56
+                    ],
+                    [
+                        "Replay 窗口",
+                        3.2227596017069704
+                    ],
+                    [
+                        "端口数据面",
+                        15.11111111111111
+                    ],
+                    [
+                        "FLIT / TLP 与链路切割",
+                        99.36842105263158
+                    ],
+                    [
+                        "可用 Tag",
+                        196.608
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        272
+                    ]
+                ],
+                "protocol": 99.36842105263158,
+                "voqNeed": 1882,
+                "voqDepth": 3,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 7776,
+                "poolBytes": 1152,
+                "poolCells": 14,
+                "egressDepth": 3,
+                "fabricSlots": 68,
+                "busyFabric": 432,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 Credit 窗口。"
+                    ],
+                    [
+                        "warn",
+                        "已配置 Replay 深度小于至少一个端口的满线速窗口加裕量。"
+                    ],
+                    [
+                        "bad",
+                        "D Credit 小于至少一个 TLP 的数据需求。该队列中的大包无法发送。"
+                    ],
+                    [
+                        "warn",
+                        "单入口 Payload 池小于热点 VOQ 突发估算。"
+                    ],
+                    [
+                        "warn",
+                        "出口暂存小于突发估算。"
+                    ],
+                    [
+                        "warn",
+                        "已配置 VOQ 深度低于突发估算。请核对流量分布和共享池。"
+                    ]
+                ],
+                "trackBytes": 11520,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "autoPool": {
+            "inputs": {
+                "poolKiB": 0,
+                "activeVoq": 4096
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 222,
+                            "actualD": 0,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0.5,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 2.5,
+                        "creditRtt": 185,
+                        "ackRtt": 185,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 111,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 222,
+                            "d": 0,
+                            "actualH": 222,
+                            "actualD": 0,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 222,
+                            "d": 888,
+                            "actualH": 222,
+                            "actualD": 888,
+                            "fcCeiling": 153.60000000000002,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        10
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        120
+                    ],
+                    [
+                        "端点及其余预算",
+                        120
+                    ]
+                ],
+                "derivedRtt": 250,
+                "rtt": 250,
+                "oneWay": 5,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 2,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 500,
+                "ideal": 500,
+                "trackDepth": 1024,
+                "trackBits": 75,
+                "tagPerFunction": 500,
+                "portCapacity": 224.4,
+                "portWidth": 2112,
+                "nominalPortWidth": 2112,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        99.36842105263158
+                    ],
+                    [
+                        "Replay 窗口",
+                        99.36842105263158
+                    ],
+                    [
+                        "端口数据面",
+                        99.73333333333333
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.60000000000002
+                    ],
+                    [
+                        "可用 Tag",
+                        196.608
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        417.06666666666666
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 99.36842105263158,
+                "voqNeed": 1224,
+                "voqDepth": 2048,
+                "voqCount": 432,
+                "activeVoq": 48,
+                "voqBytes": 31850496,
+                "poolBytes": 7962624,
+                "poolCells": 98304,
+                "egressDepth": 2048,
+                "fabricSlots": 105,
+                "busyFabric": 432,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ],
+                    [
+                        "warn",
+                        "活跃 VOQ 额度已按当前物理端口 / VC 组合封顶。"
+                    ]
+                ],
+                "trackBytes": 11520,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        },
+        "zeroDerivedRtt": {
+            "inputs": {
+                "reqMeters": 0,
+                "cplMeters": 0,
+                "switchNs": 0,
+                "endpointNs": 0
+            },
+            "expected": {
+                "read": true,
+                "reqs": [
+                    {
+                        "size": 64,
+                        "addr": 0,
+                        "request": {
+                            "size": 0,
+                            "tlp": 16,
+                            "credits": 0,
+                            "cells": 1
+                        },
+                        "completions": [
+                            {
+                                "size": 64,
+                                "tlp": 76,
+                                "credits": 4,
+                                "cells": 2
+                            }
+                        ]
+                    }
+                ],
+                "requests": [
+                    {
+                        "size": 0,
+                        "tlp": 16,
+                        "credits": 0,
+                        "cells": 1
+                    }
+                ],
+                "completions": [
+                    {
+                        "size": 64,
+                        "tlp": 76,
+                        "credits": 4,
+                        "cells": 2
+                    }
+                ],
+                "resources": [
+                    {
+                        "key": "req",
+                        "name": "发起端链路",
+                        "lanes": 16,
+                        "meters": 0,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 0,
+                        "creditRtt": 180,
+                        "ackRtt": 180,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 108,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 216,
+                            "d": 0,
+                            "actualH": 216,
+                            "actualD": 0,
+                            "fcCeiling": 153.6,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 216,
+                            "d": 864,
+                            "actualH": 216,
+                            "actualD": 864,
+                            "fcCeiling": 153.6,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    },
+                    {
+                        "key": "cpl",
+                        "name": "响应端链路",
+                        "lanes": 16,
+                        "meters": 0,
+                        "ports": 1,
+                        "share": 1,
+                        "line": 128,
+                        "tlp": 118,
+                        "linkDelay": 0,
+                        "creditRtt": 180,
+                        "ackRtt": 180,
+                        "wireCeiling": 99.36842105263158,
+                        "portCeiling": 99.73333333333333,
+                        "replayNeed": 108,
+                        "replay": 128,
+                        "replayCeiling": 99.36842105263158,
+                        "forward": {
+                            "name": "NP / MemRd",
+                            "h": 216,
+                            "d": 0,
+                            "actualH": 216,
+                            "actualD": 0,
+                            "fcCeiling": 153.6,
+                            "maxD": 0,
+                            "maxCells": 1,
+                            "burstCells": 221,
+                            "rate": 2000,
+                            "tlp": 32,
+                            "cellRate": 2
+                        },
+                        "reverse": {
+                            "name": "Cpl / CplD",
+                            "h": 216,
+                            "d": 864,
+                            "actualH": 216,
+                            "actualD": 864,
+                            "fcCeiling": 153.6,
+                            "maxD": 4,
+                            "maxCells": 2,
+                            "burstCells": 1224,
+                            "rate": 2000,
+                            "tlp": 152,
+                            "cellRate": 4
+                        }
+                    }
+                ],
+                "stages": [
+                    [
+                        "链路与 Retimer 往返",
+                        0
+                    ],
+                    [
+                        "Switch 往返穿越",
+                        0
+                    ],
+                    [
+                        "端点及其余预算",
+                        0
+                    ]
+                ],
+                "derivedRtt": 0,
+                "rtt": 0,
+                "oneWay": 0,
+                "packing": 0.921875,
+                "cellPhysical": 72,
+                "ops": 2,
+                "qBytes": 16,
+                "aBytes": 76,
+                "qCells": 1,
+                "aCells": 2,
+                "inFlight": 0,
+                "ideal": 0,
+                "trackDepth": 0,
+                "trackBits": 75,
+                "tagPerFunction": 0,
+                "portCapacity": 224.4,
+                "portWidth": 2112,
+                "nominalPortWidth": 2112,
+                "fabricWidth": 1472,
+                "fabricCapacity": 1407.6,
+                "chipRaw": 1152,
+                "ceilings": [
+                    [
+                        "FLIT / TLP 与链路切割",
+                        99.36842105263158
+                    ],
+                    [
+                        "Replay 窗口",
+                        99.36842105263158
+                    ],
+                    [
+                        "端口数据面",
+                        99.73333333333333
+                    ],
+                    [
+                        "Credit 窗口",
+                        153.6
+                    ],
+                    [
+                        "Fabric Cell 数据面",
+                        417.06666666666666
+                    ],
+                    [
+                        "可用 Tag",
+                        null
+                    ],
+                    [
+                        "发起端请求率",
+                        null
+                    ],
+                    [
+                        "响应端 Completion 率",
+                        null
+                    ]
+                ],
+                "protocol": 99.36842105263158,
+                "voqNeed": 1224,
+                "voqDepth": 2048,
+                "voqCount": 432,
+                "activeVoq": 8,
+                "voqBytes": 5308416,
+                "poolBytes": 147456,
+                "poolCells": 1820,
+                "egressDepth": 2048,
+                "fabricSlots": 105,
+                "busyFabric": 432,
+                "warnings": [
+                    [
+                        "bad",
+                        "目标 128 GB/s/端口超过当前估算上限，首个约束为 FLIT / TLP 与链路切割。"
+                    ]
+                ],
+                "trackBytes": 0,
+                "maxPayload": 64,
+                "sramScale": 1.125
+            }
+        }
+    }
+}

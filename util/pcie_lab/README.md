@@ -1,14 +1,15 @@
-# PCIe lab M0 configuration contracts
+# PCIe lab configuration and sizing
 
-This directory implements the M0 host-side contract. It does **not** implement
-sizing, TLP execution, gem5 timing, FLIT/replay, or a SimAI backend. New files
-inherit the project license in root `COPYING`/`LICENSE`; copyright holder: cary.
+This directory implements the M0 host-side contract and the M1 analytical
+sizing tasks. New files inherit the project license in root
+`COPYING`/`LICENSE`; copyright holder: cary.
 
 From the gem5 repository root:
 
 ```sh
 python3 -m unittest discover -s tests/pcie_switch -p 'test_*.py'
 python3 -m util.pcie_lab.cli util/pcie_lab/examples/reference.json --root .
+python3 -m util.pcie_lab.cli util/pcie_lab/examples/reference.json --root . --size
 ```
 
 The CLI emits a versioned `not_run` result with the experiment snapshot, source
@@ -17,6 +18,45 @@ Invalid input produces a structured diagnostic on stderr and exit status 2.
 The CLI has no simulation-success status. All Python runtime dependencies are
 standard-library modules; auditing HTML in the tests additionally requires
 Node.js. No gem5 binary, compiler, GPU, or network access is required.
+
+For `lab_reference`, `--size` adds `reference_sizing` and retains the
+`not_run` status. This field contains analytical results in the HTML units,
+including resolved resources, sorted ceilings, and warnings. A `null`
+ceiling denotes a non-limiting resource for that workload. The input
+snapshot retains automatic zero values for reproducibility.
+
+The CLI also accepts a `pcie6-hardware-calibration-v1` file. It compiles a
+reference experiment from `inputs` and the seed when present, then stores
+the complete input document under `imported_calibration`, including any
+browser simulation data.
+Top-level workspaces produce a separate diagnostic.
+
+```sh
+python3 -m util.pcie_lab.cli util/pcie_lab/examples/reference.json --root . \
+    --export-calibration > /tmp/pcie-calibration.json
+python3 -m util.pcie_lab.cli /tmp/pcie-calibration.json --root . --size
+```
+
+Exporting an experiment projects its sizing into the page's calibration
+fields and adds versioned provenance with `sim: null`. Exporting an
+imported calibration preserves its original JSON values and extensions.
+
+Run the reference event model with a gem5 binary from this checkout:
+
+```sh
+build/NULL/gem5.fast -d /tmp/pcie-m1 configs/example/pcie/reference.py \
+    util/pcie_lab/examples/reference.json \
+    --calibration-output /tmp/pcie-m1/calibration.json
+```
+
+The default result path is `reference.json` in the gem5 output directory.
+`reference_sim` contains the browser-compatible counters and measurements.
+The reference dispatcher retains the browser's fractional deadlines and
+heap ordering, using a gem5 event at the next picosecond for each callback.
+The output records the native last tick separately from the reference
+measurement window. Queue peaks are compared with sizing limits after the
+run. The reference profile uses timed credit return and replay-window
+throttling. These behaviors approximate the offline lab.
 
 ## Artifacts and boundaries
 
@@ -38,8 +78,8 @@ Node.js. No gem5 binary, compiler, GPU, or network access is required.
 
 Inputs are merged as HTML defaults, profile overrides, then user overrides;
 all overrides and raw/effective inputs remain in the experiment. `0=auto`
-values remain unresolved until M1; zero rate limits mean unlimited injection
-rate *input*, not automatic sizing. No backend or unbounded hardware is implied.
+values are resolved in the optional sizing output. Zero rate limits mean
+unlimited injection rate *input* and do not request automatic sizing.
 
 `protocol.rcb_role` identifies the System Element receiving the modeled Read
 Completions. Strict input checks permit RCB 64/128 for a Root Complex and 128

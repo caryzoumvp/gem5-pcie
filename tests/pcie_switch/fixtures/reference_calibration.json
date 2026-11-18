@@ -1,0 +1,474 @@
+{
+    "source_sha256":
+        "7b9ab025838c33d90ec62e8d9482172a4086de71c7fbecb2d9499e7057cce804",
+    "cases": {
+        "writeNoRun": {
+            "format": "pcie6-hardware-calibration-v1",
+            "inputs": {
+                "op": "write",
+                "payload": 64,
+                "target": 128,
+                "offset": 0,
+                "mrrs": 4096,
+                "mps": 256,
+                "rcb": 64,
+                "cplSplit": "mps",
+                "reqHeader": 16,
+                "cplHeader": 12,
+                "packing": 100,
+                "rate": 64,
+                "reqPorts": 1,
+                "cplPorts": 1,
+                "reqLanes": 16,
+                "cplLanes": 16,
+                "switches": 1,
+                "islLanes": 16,
+                "chipLanes": 144,
+                "chipPorts": 9,
+                "reqMeters": 0.5,
+                "cplMeters": 0.5,
+                "islMeters": 0.5,
+                "nsMeter": 5,
+                "retimers": 0,
+                "retimerNs": 10,
+                "switchNs": 60,
+                "endpointNs": 120,
+                "rttMode": "derived",
+                "fixedRtt": 250,
+                "creditFixed": 180,
+                "ackFixed": 180,
+                "functions": 1,
+                "tagBits": 10,
+                "tagBudget": 768,
+                "trackMode": "transparent",
+                "trackExtra": 32,
+                "requestLimit": 0,
+                "cplLimit": 0,
+                "margin": 20,
+                "headerCredits": 0,
+                "dataCredits": 0,
+                "replayFlits": 0,
+                "clock": 1000,
+                "util": 85,
+                "channels": 1,
+                "portWidth": 0,
+                "slices": 9,
+                "fabricWidth": 0,
+                "vc": 2,
+                "cell": 64,
+                "meta": 8,
+                "fabricCreditNs": 40,
+                "egressCells": 0,
+                "voqDepth": 0,
+                "activeVoq": 8,
+                "descriptor": 32,
+                "poolKiB": 0,
+                "burst": 2,
+                "burstNs": 250,
+                "sramFactor": 12.5,
+                "simUs": 12,
+                "simArrival": "steady"
+            },
+            "readRttNs": null,
+            "memRequests": [
+                {
+                    "payloadBytes": 64,
+                    "cplPayloadBytes": []
+                }
+            ],
+            "protocolPayloadGBpsPerRequester": 94.4,
+            "estimatedPayloadGBpsPerRequester": 94.4,
+            "switchSpec": {
+                "portChannels": 1,
+                "portWidthBits": 2016,
+                "fabricSlices": 9,
+                "fabricWidthBits": 1472,
+                "clockMHz": 1000,
+                "vcPerPort": 2,
+                "logicalVoq": 432,
+                "activeVoqPerIngress": 8,
+                "voqDepthCells": 2048,
+                "ingressPoolCells": 16384,
+                "egressCellsPerVc": 2048,
+                "fabricSlotsPerSlice": 105,
+                "trackingEntriesPerRequester": null,
+                "links": [
+                    {
+                        "name": "发起端链路",
+                        "rawGBps": 128,
+                        "creditRttNs": 185,
+                        "ackRttNs": 185,
+                        "replayFlits": 128,
+                        "forward": {
+                            "H": 222,
+                            "D": 888
+                        },
+                        "reverse": null
+                    },
+                    {
+                        "name": "响应端链路",
+                        "rawGBps": 128,
+                        "creditRttNs": 185,
+                        "ackRttNs": 185,
+                        "replayFlits": 128,
+                        "forward": {
+                            "H": 222,
+                            "D": 888
+                        },
+                        "reverse": null
+                    }
+                ]
+            },
+            "sim": null,
+            "notes":
+                "Calibrate a workload-level network model with payload capacity and same-measurement-point latency."
+        },
+        "readNoRun": {
+            "format": "pcie6-hardware-calibration-v1",
+            "inputs": {
+                "op": "read",
+                "payload": 4096,
+                "target": 128,
+                "offset": 0,
+                "mrrs": 512,
+                "mps": 256,
+                "rcb": 64,
+                "cplSplit": "mps",
+                "reqHeader": 16,
+                "cplHeader": 12,
+                "packing": 100,
+                "rate": 64,
+                "reqPorts": 1,
+                "cplPorts": 1,
+                "reqLanes": 16,
+                "cplLanes": 16,
+                "switches": 2,
+                "islLanes": 16,
+                "chipLanes": 144,
+                "chipPorts": 9,
+                "reqMeters": 0.5,
+                "cplMeters": 0.5,
+                "islMeters": 0.5,
+                "nsMeter": 5,
+                "retimers": 0,
+                "retimerNs": 10,
+                "switchNs": 60,
+                "endpointNs": 120,
+                "rttMode": "derived",
+                "fixedRtt": 250,
+                "creditFixed": 180,
+                "ackFixed": 180,
+                "functions": 1,
+                "tagBits": 10,
+                "tagBudget": 768,
+                "trackMode": "transparent",
+                "trackExtra": 32,
+                "requestLimit": 0,
+                "cplLimit": 0,
+                "margin": 20,
+                "headerCredits": 0,
+                "dataCredits": 0,
+                "replayFlits": 0,
+                "clock": 1000,
+                "util": 85,
+                "channels": 1,
+                "portWidth": 0,
+                "slices": 9,
+                "fabricWidth": 0,
+                "vc": 2,
+                "cell": 64,
+                "meta": 8,
+                "fabricCreditNs": 40,
+                "egressCells": 0,
+                "voqDepth": 0,
+                "activeVoq": 8,
+                "descriptor": 32,
+                "poolKiB": 128,
+                "burst": 2,
+                "burstNs": 250,
+                "sramFactor": 12.5,
+                "simUs": 12,
+                "simArrival": "steady"
+            },
+            "readRttNs": 375,
+            "memRequests": [
+                {
+                    "payloadBytes": 512,
+                    "cplPayloadBytes": [
+                        256,
+                        256
+                    ]
+                },
+                {
+                    "payloadBytes": 512,
+                    "cplPayloadBytes": [
+                        256,
+                        256
+                    ]
+                },
+                {
+                    "payloadBytes": 512,
+                    "cplPayloadBytes": [
+                        256,
+                        256
+                    ]
+                },
+                {
+                    "payloadBytes": 512,
+                    "cplPayloadBytes": [
+                        256,
+                        256
+                    ]
+                },
+                {
+                    "payloadBytes": 512,
+                    "cplPayloadBytes": [
+                        256,
+                        256
+                    ]
+                },
+                {
+                    "payloadBytes": 512,
+                    "cplPayloadBytes": [
+                        256,
+                        256
+                    ]
+                },
+                {
+                    "payloadBytes": 512,
+                    "cplPayloadBytes": [
+                        256,
+                        256
+                    ]
+                },
+                {
+                    "payloadBytes": 512,
+                    "cplPayloadBytes": [
+                        256,
+                        256
+                    ]
+                }
+            ],
+            "protocolPayloadGBpsPerRequester": 112.71641791044776,
+            "estimatedPayloadGBpsPerRequester": 112.71641791044776,
+            "switchSpec": {
+                "portChannels": 1,
+                "portWidthBits": 1504,
+                "fabricSlices": 9,
+                "fabricWidthBits": 1472,
+                "clockMHz": 1000,
+                "vcPerPort": 2,
+                "logicalVoq": 432,
+                "activeVoqPerIngress": 8,
+                "voqDepthCells": 1024,
+                "ingressPoolCells": 1820,
+                "egressCellsPerVc": 1024,
+                "fabricSlotsPerSlice": 105,
+                "trackingEntriesPerRequester": 128,
+                "links": [
+                    {
+                        "name": "发起端链路",
+                        "rawGBps": 128,
+                        "creditRttNs": 185,
+                        "ackRttNs": 185,
+                        "replayFlits": 128,
+                        "forward": {
+                            "H": 28,
+                            "D": 0
+                        },
+                        "reverse": {
+                            "H": 56,
+                            "D": 888
+                        }
+                    },
+                    {
+                        "name": "响应端链路",
+                        "rawGBps": 128,
+                        "creditRttNs": 185,
+                        "ackRttNs": 185,
+                        "replayFlits": 128,
+                        "forward": {
+                            "H": 28,
+                            "D": 0
+                        },
+                        "reverse": {
+                            "H": 56,
+                            "D": 888
+                        }
+                    },
+                    {
+                        "name": "每段级联链路",
+                        "rawGBps": 128,
+                        "creditRttNs": 185,
+                        "ackRttNs": 185,
+                        "replayFlits": 128,
+                        "forward": {
+                            "H": 28,
+                            "D": 0
+                        },
+                        "reverse": {
+                            "H": 56,
+                            "D": 888
+                        }
+                    }
+                ]
+            },
+            "sim": null,
+            "notes":
+                "Calibrate a workload-level network model with payload capacity and same-measurement-point latency."
+        },
+        "readBrowserRun": {
+            "format": "pcie6-hardware-calibration-v1",
+            "inputs": {
+                "op": "read",
+                "payload": 64,
+                "target": 128,
+                "offset": 0,
+                "mrrs": 4096,
+                "mps": 256,
+                "rcb": 64,
+                "cplSplit": "mps",
+                "reqHeader": 16,
+                "cplHeader": 12,
+                "packing": 100,
+                "rate": 64,
+                "reqPorts": 1,
+                "cplPorts": 1,
+                "reqLanes": 16,
+                "cplLanes": 16,
+                "switches": 1,
+                "islLanes": 16,
+                "chipLanes": 144,
+                "chipPorts": 9,
+                "reqMeters": 0.5,
+                "cplMeters": 0.5,
+                "islMeters": 0.5,
+                "nsMeter": 5,
+                "retimers": 0,
+                "retimerNs": 10,
+                "switchNs": 60,
+                "endpointNs": 120,
+                "rttMode": "derived",
+                "fixedRtt": 250,
+                "creditFixed": 180,
+                "ackFixed": 180,
+                "functions": 1,
+                "tagBits": 10,
+                "tagBudget": 768,
+                "trackMode": "transparent",
+                "trackExtra": 32,
+                "requestLimit": 0,
+                "cplLimit": 0,
+                "margin": 20,
+                "headerCredits": 0,
+                "dataCredits": 0,
+                "replayFlits": 0,
+                "clock": 1000,
+                "util": 85,
+                "channels": 1,
+                "portWidth": 0,
+                "slices": 9,
+                "fabricWidth": 0,
+                "vc": 2,
+                "cell": 64,
+                "meta": 8,
+                "fabricCreditNs": 40,
+                "egressCells": 0,
+                "voqDepth": 0,
+                "activeVoq": 8,
+                "descriptor": 32,
+                "poolKiB": 128,
+                "burst": 2,
+                "burstNs": 250,
+                "sramFactor": 12.5,
+                "simUs": 1,
+                "simArrival": "steady"
+            },
+            "readRttNs": 250,
+            "memRequests": [
+                {
+                    "payloadBytes": 64,
+                    "cplPayloadBytes": [
+                        64
+                    ]
+                }
+            ],
+            "protocolPayloadGBpsPerRequester": 99.36842105263158,
+            "estimatedPayloadGBpsPerRequester": 99.36842105263158,
+            "switchSpec": {
+                "portChannels": 1,
+                "portWidthBits": 2112,
+                "fabricSlices": 9,
+                "fabricWidthBits": 1472,
+                "clockMHz": 1000,
+                "vcPerPort": 2,
+                "logicalVoq": 432,
+                "activeVoqPerIngress": 8,
+                "voqDepthCells": 2048,
+                "ingressPoolCells": 1820,
+                "egressCellsPerVc": 2048,
+                "fabricSlotsPerSlice": 105,
+                "trackingEntriesPerRequester": 1024,
+                "links": [
+                    {
+                        "name": "发起端链路",
+                        "rawGBps": 128,
+                        "creditRttNs": 185,
+                        "ackRttNs": 185,
+                        "replayFlits": 128,
+                        "forward": {
+                            "H": 222,
+                            "D": 0
+                        },
+                        "reverse": {
+                            "H": 222,
+                            "D": 888
+                        }
+                    },
+                    {
+                        "name": "响应端链路",
+                        "rawGBps": 128,
+                        "creditRttNs": 185,
+                        "ackRttNs": 185,
+                        "replayFlits": 128,
+                        "forward": {
+                            "H": 222,
+                            "D": 0
+                        },
+                        "reverse": {
+                            "H": 222,
+                            "D": 888
+                        }
+                    }
+                ]
+            },
+            "sim": {
+                "stats": {
+                    "bytes": 74368,
+                    "arrivals": 2000,
+                    "issued": 1930,
+                    "completed": 1162,
+                    "tagStall": 247,
+                    "creditStall": 0,
+                    "queue": 2,
+                    "pool": 2,
+                    "egress": 366,
+                    "activeVoq": 1,
+                    "peakTags": 768,
+                    "events": 27172
+                },
+                "requestedDuration": 1000,
+                "actualDuration": 1000,
+                "shortened": false,
+                "bw": 92.96,
+                "sampleCount": 1162,
+                "p50": 335.6861727071829,
+                "p99": 417.80481677500586,
+                "p999": 419.245494741108,
+                "queuePass": true
+            },
+            "notes":
+                "Calibrate a workload-level network model with payload capacity and same-measurement-point latency."
+        }
+    }
+}
