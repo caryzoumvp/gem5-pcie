@@ -28,6 +28,7 @@
 
 #include "dev/pci/pcie/ordering.hh"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace gem5::pcie
@@ -64,7 +65,7 @@ Ordering::arrived(OrderingDomain domain, TlpClass type,
 }
 
 bool
-Ordering::eligible(Id id) const
+Ordering::eligible(Id id, const std::function<bool(Id)> &can_follow) const
 {
     auto it = pending.find(id);
     if (it == pending.end()) {
@@ -72,14 +73,19 @@ Ordering::eligible(Id id) const
     }
     const auto &entry = it->second;
     const auto &state = domains.at(entry.domain);
-    if (!state.posted.empty() && *state.posted.begin() < id) {
+    const auto unblocked = [&](const std::set<Id> &group) {
+        return group.empty() || *group.begin() >= id ||
+               (can_follow &&
+                std::all_of(group.begin(), group.lower_bound(id), can_follow));
+    };
+    if (!unblocked(state.posted)) {
         return false;
     }
     if (entry.type == TlpClass::NonPosted) {
-        return id == *state.nonPosted.begin();
+        return unblocked(state.nonPosted);
     }
     if (entry.type == TlpClass::Completion) {
-        return id == *state.completions.at(*entry.completion).begin();
+        return unblocked(state.completions.at(*entry.completion));
     }
     return true;
 }

@@ -977,6 +977,21 @@ M2可用aggregate服务计算TransferProgress，仍保留有限in-flight记录�
 独立staging。M3改为Cell/beat事件时复用相同接受/引用/完成合同，校验
 新增pipeline状态没有产生隐藏无限容量或多扣信用。
 
+已实现的 M3 `SwitchCore` 在 core 边沿推进每次 beat，TLP 共享有界
+staging 预约贯穿 Fabric 和 egress CDC。每个被授权 TLP 在同一条
+lane 连续服务，跨 Slice 的固定传播发生在最后一拍释放 bank 与
+lane 之后，数据到达下一阶段时才归还 core 存储。相同出口的前序
+已持有 staging 时可允许后续 grant；后续 TLP 在前序已提交相同
+TX FIFO 后才可提交。跨出口前序仍须离开发射器。每个真实
+`departed` 回调只提交一次 ordering，FLIT 重放不重复提交。
+
+`PcieTiming` 将方向链路、端点和各 hop 绑定在同一 gem5 事件队列。
+九端口模式每条双向物理链路连接一个合成 Requester/Completer，
+按分离页对齐地址窗路由 Memory 请求，按 Requester ID 路由
+Completion。每个方向有独立 FLIT 串行器和 replay；配对回程模式的
+NOP ACK/NAK 与反向数据共用串行器，延迟回程模式作为对照。
+这两种已初始化配置的 FC Update 都使用协调抽象事件。
+
 ### 14.5 具体内部传输例（仅说明合同）
 
 取一个64B MemWr、16B建模header、64B内部Cell、64B payload sector。
@@ -1061,3 +1076,8 @@ M3报告把`correctness_status`、`target_status`与`evidence_level`分开：
 硅签核。只有M3周期门通过的profile才进入M4 SimAI，同profile在adapter
 前后检查；模型step/TPOT收益由闭环运行得出，不以switch降低若干ns直接
 乘成模型加速比。
+
+M3 的原生输入、每方向输出和阶段验收结果见
+[M3 验收记录](validation/M3.md)。`performance.py` 生成吞吐/时延
+窗口和目标判定，`tail_latency.py` 对照同路由的空载与固定负载
+cohort。上述测量使用合成端点，PHY/pin 和实际 XPU 分项仍待校准。

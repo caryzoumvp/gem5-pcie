@@ -43,21 +43,21 @@ class TestQueue
 {
   public:
     Tick now = 0;
-    std::multimap<Tick, LinkDirection::Event> pending;
+    std::multimap<std::pair<Tick, bool>, LinkDirection::Event> pending;
 
     void
-    add(Tick tick, LinkDirection::Event event)
+    add(Tick tick, LinkDirection::Event event, bool service = false)
     {
         EXPECT_GE(tick, now);
-        pending.emplace(tick, std::move(event));
+        pending.emplace(std::pair{tick, service}, std::move(event));
     }
 
     void
     advance(Tick tick)
     {
-        while (!pending.empty() && pending.begin()->first <= tick) {
+        while (!pending.empty() && pending.begin()->first.first <= tick) {
             auto e = pending.extract(pending.begin());
-            now = e.key();
+            now = e.key().first;
             e.mapped()();
         }
         now = tick;
@@ -153,6 +153,100 @@ TEST(PcieSwitchCore, BankAndFabricAreGrantedTogether)
         EXPECT_EQ(core.counts().stagedCells, 2);
         EXPECT_EQ(core.counts().coreDescriptors, 0);
     }
+}
+
+TEST(PcieSwitchCore, SameEgressOrdersOnWireAndLeavesCrossEgressBlocked)
+{
+    TestQueue q;
+    auto config = limits();
+    config.pipelined = true;
+    config.ingress = {4, 4, 2};
+    config.voqCells = 4;
+    config.stagingCells = 4;
+    config.fabricChannels = 1;
+    config.crossSliceDelay = 25;
+    std::vector<Tick> grants;
+    std::vector<std::pair<uint64_t, Tick>> accepted;
+    SwitchCore *self = nullptr;
+    SwitchCore core(
+        config, [&](Tick t, auto event) { q.add(t, std::move(event)); },
+        [&](Tick t, const ForwardTlp &tlp) {
+            accepted.emplace_back(tlp.id, t);
+            q.add(t + 50, [&, t, id = tlp.id] { self->departed(t + 50, id); });
+            return SendResult::Accepted;
+        },
+        [&](Tick t, auto event) { q.add(t, std::move(event), true); },
+        [&](SwitchCore::TraceEvent event) {
+            if (event.stage == SwitchCore::Stage::FabricGrant) {
+                grants.push_back(event.tick);
+            }
+        });
+    self = &core;
+    const auto release = [](Tick, uint64_t) {};
+    core.receive(0, write(1, 0, 2), release);
+    core.receive(0, write(2, 0, 2), release);
+    core.receive(0, write(3, 0, 1), release);
+    q.advance(115);
+    EXPECT_EQ(grants, (std::vector<Tick>{20, 30}));
+    EXPECT_EQ(accepted,
+              (std::vector<std::pair<uint64_t, Tick>>{{1, 60}, {2, 70}}));
+    q.advance(300);
+    ASSERT_EQ(grants.size(), 3);
+    EXPECT_GE(grants.back(), 120);
+    ASSERT_EQ(accepted.size(), 3);
+    EXPECT_EQ(accepted.back().first, 3);
+    EXPECT_TRUE(core.empty());
+}
+
+TEST(PcieSwitchCore, MultiBeatTransferKeepsOneReservationUntilFinalBeat)
+{
+    using Stage = SwitchCore::Stage;
+    TestQueue q;
+    auto config = limits();
+    config.pipelined = true;
+    config.voqCells = 4;
+    config.stagingCells = 4;
+    config.ingress = {1, 4, 1};
+    std::vector<std::pair<Stage, Tick>> trace;
+    SwitchCore core(
+        config, [&](Tick t, auto event) { q.add(t, std::move(event)); },
+        [](Tick, const ForwardTlp &) { return SendResult::NoCredit; },
+        [&](Tick t, auto event) { q.add(t, std::move(event), true); },
+        [&](SwitchCore::TraceEvent event) {
+            trace.emplace_back(event.stage, event.tick);
+        });
+    auto packet = write(1, 0, 2);
+    // 144 B uses three 64 B cells, with one cell served per cycle.
+    packet.payload = std::make_shared<const std::vector<uint8_t>>(128, 1);
+    std::vector<Tick> returns;
+    core.receive(0, std::move(packet),
+                 [&](Tick t, auto) { returns.push_back(t); });
+    q.advance(60);
+    EXPECT_EQ(core.counts().grants, 1);
+    EXPECT_EQ(core.counts().coreDescriptors, 1);
+    EXPECT_EQ(core.counts().stagedCells, 3);
+    EXPECT_EQ(core.counts().writeBeats, 3);
+    EXPECT_EQ(core.counts().readBeats, 1);
+    EXPECT_EQ(returns, (std::vector<Tick>{40}));
+    q.advance(80);
+    const std::vector<std::pair<Stage, Tick>> expected{
+        {Stage::Rx, 0},
+        {Stage::CoreReady, 0},
+        {Stage::WriteStart, 10},
+        {Stage::WriteContinuation, 20},
+        {Stage::WriteContinuation, 30},
+        {Stage::RxRelease, 40},
+        {Stage::FabricGrant, 50},
+        {Stage::FabricContinuation, 60},
+        {Stage::FabricContinuation, 70},
+        {Stage::ReadLaneRelease, 80},
+        {Stage::FabricDone, 80},
+        {Stage::TxReady, 80},
+    };
+    EXPECT_EQ(trace, expected);
+    EXPECT_EQ(core.counts().coreDescriptors, 0);
+    EXPECT_EQ(core.counts().stagedCells, 3);
+    EXPECT_EQ(core.counts().readBeats, 3);
 }
 
 TEST(PcieSwitchCore, DownstreamCreditBacksUpTheUpstreamLink)
@@ -272,6 +366,67 @@ TEST(PcieSwitchCore, EqualTickIngressDoesNotDependOnCallbackOrder)
         receive(reversed ? 0 : 1);
         q.advance(70);
         EXPECT_EQ(copied, (std::vector<uint32_t>{0, 1}));
+    }
+}
+
+TEST(PcieSwitchCore, IndependentParseAndCrossingEdges)
+{
+    TestQueue q;
+    auto config = limits();
+    config.linkCycle = 6;
+    config.parserSlots = 1;
+    config.parserCycles = 1;
+    config.ingressCdcCycles = 2;
+    config.egressCdcCycles = 2;
+    config.crossSliceDelay = 7;
+    using Stage = SwitchCore::Stage;
+    using Trace = SwitchCore::TraceEvent;
+    std::vector<Trace> trace;
+    SwitchCore *self = nullptr;
+    SwitchCore core(
+        config, [&](Tick t, auto event) { q.add(t, std::move(event)); },
+        [&](Tick tick, const ForwardTlp &tlp) {
+            q.add(tick + 10,
+                  [&, tick, id = tlp.id] { self->departed(tick + 10, id); });
+            return SendResult::Accepted;
+        },
+        {}, [&](Trace event) { trace.push_back(event); });
+    self = &core;
+    core.receive(3, write(7, 0, 3), [](Tick, auto) {});
+    q.advance(150);
+    const std::vector<Trace> expected{
+        {Stage::Rx, 3, 7, 0},           {Stage::ParseStart, 6, 7, 0},
+        {Stage::ParseDone, 12, 7, 0},   {Stage::CoreReady, 40, 7, 0},
+        {Stage::WriteStart, 50, 7, 0},  {Stage::RxRelease, 60, 7, 0},
+        {Stage::FabricGrant, 70, 7, 0}, {Stage::FabricDone, 87, 7, 0},
+        {Stage::TxReady, 102, 7, 3},    {Stage::TxAccepted, 110, 7, 3},
+        {Stage::TxDeparted, 120, 7, 3},
+    };
+    EXPECT_EQ(trace, expected);
+    EXPECT_TRUE(core.empty());
+}
+
+TEST(PcieSwitchCore, ParserSlotsLimitIssueRatePerInputPort)
+{
+    for (unsigned slots : {1, 2}) {
+        TestQueue q;
+        auto config = limits();
+        config.linkCycle = 6;
+        config.parserSlots = slots;
+        config.parserCycles = 2;
+        std::vector<Tick> starts;
+        SwitchCore core(
+            config, [&](Tick t, auto event) { q.add(t, std::move(event)); },
+            [](Tick, const ForwardTlp &) { return SendResult::NoCredit; }, {},
+            [&](SwitchCore::TraceEvent event) {
+                if (event.stage == SwitchCore::Stage::ParseStart) {
+                    starts.push_back(event.tick);
+                }
+            });
+        core.receive(3, write(7, 0, 3), [](Tick, auto) {});
+        core.receive(3, write(8, 0, 3), [](Tick, auto) {});
+        q.advance(25);
+        EXPECT_EQ(starts, (std::vector<Tick>{6, slots == 1 ? 12u : 6u}));
     }
 }
 

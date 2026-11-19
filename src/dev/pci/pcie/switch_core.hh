@@ -80,6 +80,12 @@ struct SwitchLimits
     CoreResources::ClassMinimums ingressMinimums{};
     Tick cycle;
     Tick crossSliceDelay;
+    Tick linkCycle = 0;
+    uint32_t parserSlots = 0;
+    uint32_t parserCycles = 0;
+    uint32_t ingressCdcCycles = 0;
+    uint32_t egressCdcCycles = 0;
+    bool pipelined = false;
 };
 
 /** Bounded store-and-forward switch. The caller supplies an RX-backed TLP
@@ -91,6 +97,32 @@ class SwitchCore
     using Id = LinkDirection::Id;
     using ReleaseRx = LinkDirection::TransferEvent;
     using Transmit = std::function<SendResult(Tick, const ForwardTlp &)>;
+    enum class Stage : uint8_t
+    {
+        Rx,
+        ParseStart,
+        ParseDone,
+        CoreReady,
+        WriteStart,
+        RxRelease,
+        FabricGrant,
+        FabricDone,
+        TxReady,
+        TxAccepted,
+        TxDeparted,
+        ReadLaneRelease,
+        WriteContinuation,
+        FabricContinuation
+    };
+    struct TraceEvent
+    {
+        Stage stage;
+        Tick tick;
+        Id id;
+        uint32_t resource;
+        bool operator==(const TraceEvent &) const = default;
+    };
+    using Trace = std::function<void(TraceEvent)>;
 
     struct Counts
     {
@@ -108,11 +140,14 @@ class SwitchCore
         uint64_t fabricStalls = 0;
         uint64_t stagingStalls = 0;
         uint64_t orderingStalls = 0;
+        uint64_t writeBeats = 0;
+        uint64_t readBeats = 0;
     };
 
     SwitchCore(SwitchLimits limits, LinkDirection::Schedule schedule,
                Transmit transmit,
-               LinkDirection::Schedule service_schedule = {});
+               LinkDirection::Schedule service_schedule = {},
+               Trace trace = {});
     SwitchCore(const SwitchCore &) = delete;
     SwitchCore &operator=(const SwitchCore &) = delete;
 
@@ -134,7 +169,10 @@ class SwitchCore
         Ready,
         Fabric,
         Staged,
-        Tx
+        Tx,
+        Parsing,
+        IngressCdc,
+        EgressCdc
     };
 
     struct QueueKey
@@ -175,9 +213,18 @@ class SwitchCore
     };
 
     void pump(Tick now);
+    void queueParser(Tick now, uint32_t ingress);
+    void launchParser(Tick now, uint32_t ingress);
+    void coreReady(Tick now, Id id);
+    void txReady(Tick now, Id id);
+    void traceStage(Stage stage, Tick now, Id id, uint32_t resource) const;
     void admit(Tick now);
     void grant(Tick now);
     void transmitStaged(Tick now);
+    bool canFollow(const Transfer &entry, bool at_tx) const;
+    void releaseService(Tick now, Id id, size_t bank, size_t channel);
+    void serveBeats(Tick now, Id id, uint32_t cells, Stage stage,
+                    uint32_t resource, LinkDirection::Event complete);
     bool canStage(const Transfer &transfer) const;
     Tick service(uint32_t cells) const;
 
@@ -185,13 +232,17 @@ class SwitchCore
     LinkDirection::Schedule schedule;
     LinkDirection::Schedule serviceSchedule;
     Transmit transmit;
+    Trace trace;
     Ordering ordering;
     std::vector<std::unique_ptr<CoreResources>> resources;
     std::vector<Egress> egress;
     std::vector<bool> readBusy;
     std::vector<bool> writeBusy;
     std::vector<bool> fabricBusy;
+    std::vector<std::deque<Id>> parserQueues;
+    std::vector<bool> parserPending;
     std::map<Id, Transfer> active;
+    std::map<Ordering::Id, Id> orderingOwners;
     std::deque<Id> rx;
     std::map<QueueKey, Voq> voqs;
     std::optional<QueueKey> lastGrant;

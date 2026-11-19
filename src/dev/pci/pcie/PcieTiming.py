@@ -42,10 +42,14 @@ class PcieTiming(ClockedObject):
         PyBindMethod("completedReads"),
         PyBindMethod("report"),
         PyBindMethod("waitGraph"),
+        PyBindMethod("coreTrace"),
     ]
 
     cpu_side = VectorResponsePort("Timing requests from a synthetic Requester")
     hops = Param.Unsigned(1, "Number of transparent switches in the chain")
+    bidirectional_endpoints = Param.Bool(
+        False, "Give each requester port an independent target window"
+    )
     base = Param.Addr(0x1000, "Start of the downstream address window")
     window = Param.MemorySize("16KiB", "Size of the downstream memory")
     outstanding = Param.Unsigned(8, "Maximum retained requests per Requester")
@@ -76,5 +80,34 @@ class PcieTiming(ClockedObject):
     voq_cells = Param.Unsigned(64, "Cells per VOQ")
     staging_cells = Param.Unsigned(64, "Cells per egress")
     fabric_channels = Param.Unsigned(2, "Parallel switch channels")
+    ports_per_slice = Param.Unsigned(1, "Contiguous ports in a switch slice")
     fabric_cells = Param.Unsigned(1, "Cells served per channel cycle")
     cross_slice_delay = Param.Latency("0ns", "Additional cross-slice delay")
+    flit_detail = Param.Bool(False, "Serialize and recover 256B FLITs")
+    shared_fc = Param.Bool(False, "Target links advertise Shared FC backing")
+    shared_fc_tx_capable = Param.Bool(True, "Transmitter supports Shared FC")
+    shared_merge_posted_completion = Param.Bool(
+        False, "Merge the Posted and Completion shared pools"
+    )
+    replay_flits = Param.Unsigned(8, "FLIT replay buffer entries")
+    flit_flush = Param.Latency("1ns", "FLIT packing flush deadline")
+    flit_feedback = Param.Latency("15ns", "Abstract reverse DLP delay")
+    flit_wire_feedback = Param.Bool(
+        False, "Serialize ACK/NAK NOP FLITs on the opposite direction"
+    )
+    flit_replay_timeout = Param.Latency("160ns", "FLIT replay watchdog")
+    flit_fec_delay = Param.Latency("0ns", "Abstract FLIT integrity delay")
+    flit_link_period = Param.Latency(
+        "0ns", "FLIT clock; 0 uses the core clock"
+    )
+    parser_tlps_per_cycle = Param.Unsigned(2, "Header parser slots per port")
+    parser_cycles = Param.Unsigned(1, "Parser latency in link cycles")
+    ingress_cdc_cycles = Param.Unsigned(0, "Ingress CDC in core cycles")
+    egress_cdc_cycles = Param.Unsigned(0, "Egress CDC in link cycles")
+    core_trace_limit = Param.Unsigned(0, "Maximum recorded core stage events")
+    corrupt_first_flit = Param.Bool(
+        False, "Flip one bit on the first requester data FLIT"
+    )
+    drop_first_ack = Param.Bool(
+        False, "Drop the first requester ACK in the detailed link"
+    )

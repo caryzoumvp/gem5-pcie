@@ -40,7 +40,7 @@ M3/M4是完整目标的重要后续工作；M5按明确范围单独验收，不�
 | M0 | 本地验收完成 | 63字段/结构/来源合同与21项测试通过；记录见validation/M0.md | F-01/04/08/09，T-01 |
 | M1 | 已验收 | sizing与JSON对照、S-01–S-07参考回归 | F-02/07/19/20/21，T-02/03 |
 | M2 | 已验收 | 有限单颗/级联、数据/资源守恒、S-08排空 | F-03/06/17/22，A-01至A-04/07，T-04 |
-| M3 | 未开始 | 所选Gen6条款及周期资源/时钟trace验收通过，冻结cycle profile | F-01/02/06/19，T-05 |
+| M3 | 完成 | 所选Gen6条款和周期门通过；固定profile的性能目标按用例分别判定 | F-01/02/06/19，T-05 |
 | M4 | 未开始 | 已验收gem5周期模型接入SimAI、collective/DAG闭环与结果导入 | B-01/05/06，F-09/20/21/22，T-06 |
 | M5 | 未开始 | 按extension逐项满足入口与测试合同 | F-05/10至F-16/18/23至F-32，T-07至T-10 |
 
@@ -166,6 +166,16 @@ M2无错TLP预算下的ACK/replay空间若采用近似须标记；不得提前�
 | M3-04 | ordering/Completion规则覆盖 | 合法/非法越过、分段/错误Completion、能力不匹配的条款测试 |
 | M3-05 | 参数敏感性/competitor_target评估 | 吞吐/短包/置换/尾延与测点明确，目标结果有输入与误差边界 |
 | M3-06 | 周期级profile和资源服务验收 | V-35：端口TLP/cycle、bank/RAM读写、仲裁/Fabric/staging、时钟/CDC和释放边沿有独立周期trace；通过后才启动SimAI闭环 |
+
+M3-01–04 覆盖所选 Memory TLP、FLIT packing 和 CRC、已初始化
+的 Shared/Dedicated FC、Standard Replay 及 Completion/ordering
+规则。原生回归含合并共享、专用回退、配对反向 ACK/NAK、故障
+恢复、两级 8→1 一格暂存和不支持的 TX 能力诊断。M3-06 以
+独立时序覆盖 parser、bank/Fabric 逐拍服务、两端 CDC、staging
+和真实物理发出边界。M3-05 已运行 SW-LAT、RTT-64、SW-BULK、
+SW-SMALL、SW-PERM 和 SW-TAIL；部分 Read 吞吐目标未达标，
+缺 PHY/端点标定的目标保持不可比。配置、测点、能力限制和复现
+入口详见 [M3验收记录](validation/M3.md)。
 
 退出：只对覆盖矩阵中已实现条款声明通过；非实现项保持缺能力。FEC以
 可控错误/延迟抽象时明确不含模拟信道/电气行为。Gen5/non-FLIT兼容须另

@@ -31,6 +31,7 @@
 
 #include <compare>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <set>
@@ -65,7 +66,7 @@ class Ordering
 
     Id arrived(OrderingDomain domain, TlpClass type,
                std::optional<CompletionIdentity> completion = std::nullopt);
-    bool eligible(Id id) const;
+    bool eligible(Id id, const std::function<bool(Id)> &can_follow = {}) const;
     /** Retire a predecessor after its last byte leaves the serializer. */
     bool commit(Id id);
     /** Remove a TLP that terminated explicitly without transmission. */

@@ -61,6 +61,7 @@ for hops, suffix, extra in (
     (2, "", []),
     (2, "-one-cell", ["--one-cell"]),
     (2, "-tiny-baseline", ["--tiny-baseline"]),
+    (2, "-one-cell-flit", ["--one-cell", "--flit"]),
 ):
     gem5_verify_config(
         name=f"pcie-timing-incast-{hops}-hop{suffix}",

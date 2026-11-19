@@ -322,8 +322,9 @@ COMP来源/条件不变。P-ID仍为P-01–P-13，不另换一套编号。
 | P-13 | x16→x16 cut-through ≤90ns【TARGET】 | CT-PIN，COMP-04对标；必须对齐包型/首末bit/PHY边界；S/F结果不冒充C/T | 安全C/T、RX/TX/PHY预算及实测/VIP证据，单独验收 |
 
 所有目标报告`PASS/FAIL/UNSUPPORTED/NOT_COMPARABLE/NOT_RUN`及原因。
-配置合法、RTL接口存在或输出了P99，均不表示数值目标达成。当前M0只
-做配置合同，P-02/P-04–P-10/P-13尚无运行证据；P-11/12仍缺业务数值。
+配置合法、RTL接口存在或输出了P99，均不表示数值目标达成。
+各模型配置的运行证据见 [M3 验收记录](validation/M3.md)；
+P-11/12仍缺业务数值。
 
 ### 6.5 性能验收profile与独立分母
 

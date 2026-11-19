@@ -50,6 +50,21 @@ after(Tick now, Tick delay)
     return now + delay;
 }
 
+Tick
+cycleDelay(Tick period, uint32_t cycles)
+{
+    if (cycles && period > MaxTick / cycles) {
+        throw std::overflow_error("PCIe switch cycles exceed Tick range");
+    }
+    return period * cycles;
+}
+
+Tick
+aligned(Tick now, Tick period)
+{
+    return after(now, (period - now % period) % period);
+}
+
 uint32_t
 ceilUnits(uint32_t bytes, uint32_t unit)
 {
@@ -95,16 +110,19 @@ SwitchCore::Egress::total() const
 
 SwitchCore::SwitchCore(SwitchLimits limits, LinkDirection::Schedule schedule,
                        Transmit transmit,
-                       LinkDirection::Schedule service_schedule)
+                       LinkDirection::Schedule service_schedule, Trace trace)
     : limits(limits),
       schedule(std::move(schedule)),
       serviceSchedule(service_schedule ? std::move(service_schedule)
                                        : this->schedule),
       transmit(std::move(transmit)),
+      trace(std::move(trace)),
       egress(limits.ports),
       readBusy(limits.bankCount),
       writeBusy(limits.bankCount),
-      fabricBusy(limits.fabricChannels)
+      fabricBusy(limits.fabricChannels),
+      parserQueues(limits.ports),
+      parserPending(limits.ports)
 {
     const auto reserved =
         std::accumulate(limits.stagingMinimums.begin(),
@@ -114,7 +132,9 @@ SwitchCore::SwitchCore(SwitchLimits limits, LinkDirection::Schedule schedule,
         !limits.sectorBytes || !limits.voqCells || !limits.stagingCells ||
         !limits.ingress.descriptors || !limits.ingress.activeVoqs ||
         !limits.cycle || reserved > limits.stagingCells || !this->schedule ||
-        !this->transmit) {
+        !this->transmit || (limits.parserSlots && !limits.parserCycles) ||
+        ((limits.parserSlots || limits.egressCdcCycles) &&
+         !limits.linkCycle)) {
         throw std::invalid_argument("invalid PCIe switch limits or callbacks");
     }
     for (uint32_t port = 0; port < limits.ports; ++port) {
@@ -162,6 +182,81 @@ SwitchCore::receive(Tick now, ForwardTlp tlp, ReleaseRx release_rx)
                          tlp.type, tlp.completion);
     active.emplace(
         id, Transfer{std::move(tlp), seq, std::move(release_rx), cells, now});
+    if (limits.pipelined) {
+        orderingOwners.emplace(seq, id);
+    }
+    auto &entry = active.at(id);
+    const auto ingress = entry.tlp.ingress;
+    traceStage(Stage::Rx, now, id, ingress);
+    if (limits.parserSlots) {
+        entry.phase = Phase::Parsing;
+        parserQueues[ingress].push_back(id);
+        queueParser(now, ingress);
+    } else {
+        coreReady(now, id);
+    }
+}
+
+void
+SwitchCore::traceStage(Stage stage, Tick now, Id id, uint32_t resource) const
+{
+    if (trace) {
+        trace({stage, now, id, resource});
+    }
+}
+
+void
+SwitchCore::queueParser(Tick now, uint32_t ingress)
+{
+    if (parserPending[ingress]) {
+        return;
+    }
+    const auto next = after(now, limits.linkCycle - now % limits.linkCycle);
+    parserPending[ingress] = true;
+    serviceSchedule(next, [this, next, ingress] {
+        parserPending[ingress] = false;
+        launchParser(next, ingress);
+    });
+}
+
+void
+SwitchCore::launchParser(Tick now, uint32_t ingress)
+{
+    auto &queue = parserQueues[ingress];
+    const auto done =
+        after(now, cycleDelay(limits.linkCycle, limits.parserCycles));
+    const auto core_ready =
+        limits.ingressCdcCycles
+            ? after(aligned(done, limits.cycle),
+                    cycleDelay(limits.cycle, limits.ingressCdcCycles))
+            : done;
+    for (uint32_t i = 0; i < limits.parserSlots && !queue.empty(); ++i) {
+        const Id id = queue.front();
+        queue.pop_front();
+        traceStage(Stage::ParseStart, now, id, ingress);
+        schedule(done, [this, done, core_ready, ingress, id] {
+            traceStage(Stage::ParseDone, done, id, ingress);
+            if (core_ready == done) {
+                coreReady(done, id);
+            } else {
+                active.at(id).phase = Phase::IngressCdc;
+                schedule(core_ready, [this, core_ready, id] {
+                    coreReady(core_ready, id);
+                });
+            }
+        });
+    }
+    if (!queue.empty()) {
+        queueParser(now, ingress);
+    }
+}
+
+void
+SwitchCore::coreReady(Tick now, Id id)
+{
+    auto &entry = active.at(id);
+    entry.phase = Phase::Rx;
+    traceStage(Stage::CoreReady, now, id, entry.tlp.ingress);
     const auto sort_key = [this](Id id) {
         const auto &entry = active.at(id);
         return std::tuple(entry.receivedAt, entry.tlp.ingress, entry.order);
@@ -182,6 +277,10 @@ SwitchCore::departed(Tick now, Id id)
     if (it == active.end() || it->second.phase != Phase::Tx ||
         !ordering.commit(it->second.order)) {
         throw std::logic_error("unexpected PCIe switch departure");
+    }
+    traceStage(Stage::TxDeparted, now, id, it->second.tlp.egress);
+    if (limits.pipelined) {
+        orderingOwners.erase(it->second.order);
     }
     active.erase(it);
     wake(now);
@@ -217,6 +316,32 @@ SwitchCore::service(uint32_t cells) const
         throw std::overflow_error("PCIe core service exceeds Tick range");
     }
     return cycles * limits.cycle;
+}
+
+void
+SwitchCore::serveBeats(Tick now, Id id, uint32_t cells, Stage stage,
+                       uint32_t resource, LinkDirection::Event complete)
+{
+    if (!limits.pipelined) {
+        schedule(after(now, service(cells)), std::move(complete));
+        return;
+    }
+    const Tick edge = after(now, limits.cycle);
+    schedule(edge, [this, edge, id, cells, stage, resource,
+                    complete = std::move(complete)]() mutable {
+        if (stage == Stage::WriteContinuation) {
+            ++observations.writeBeats;
+        } else {
+            ++observations.readBeats;
+        }
+        if (cells <= limits.cellsPerCycle) {
+            complete();
+            return;
+        }
+        traceStage(stage, edge, id, resource);
+        serveBeats(edge, id, cells - limits.cellsPerCycle, stage, resource,
+                   std::move(complete));
+    });
 }
 
 void
@@ -258,19 +383,25 @@ SwitchCore::admit(Tick now)
         voqs[key].usedCells += entry.cells;
         entry.reservation = *reservation;
         entry.phase = Phase::Writing;
+        traceStage(Stage::WriteStart, now, id, bank);
         observations.peakCore =
             std::max(observations.peakCore, ++coreReserved);
         writeBusy[bank] = true;
+        if (limits.pipelined) {
+            wake(now);
+        }
         it = rx.erase(it);
-        schedule(done, [this, id, bank, done] {
-            auto &copy = active.at(id);
-            writeBusy[bank] = false;
-            copy.phase = Phase::Ready;
-            voqs.at(copy.key()).ready.push_back(id);
-            auto release = std::move(copy.releaseRx);
-            release(done, id);
-            wake(done);
-        });
+        serveBeats(now, id, entry.cells, Stage::WriteContinuation, bank,
+                   [this, id, bank, done] {
+                       auto &copy = active.at(id);
+                       writeBusy[bank] = false;
+                       copy.phase = Phase::Ready;
+                       voqs.at(copy.key()).ready.push_back(id);
+                       auto release = std::move(copy.releaseRx);
+                       traceStage(Stage::RxRelease, done, id, bank);
+                       release(done, id);
+                       wake(done);
+                   });
     }
 }
 
@@ -286,6 +417,33 @@ SwitchCore::canStage(const Transfer &entry) const
         }
     }
     return entry.cells <= available;
+}
+
+bool
+SwitchCore::canFollow(const Transfer &entry, bool at_tx) const
+{
+    if (!limits.pipelined) {
+        return ordering.eligible(entry.order);
+    }
+    // Same-egress predecessors must already hold staging backing at grant.
+    // At TX they must be in the outbound FIFO. Cross-egress predecessors
+    // still block until physical departure.
+    return ordering.eligible(entry.order, [&](Ordering::Id order) {
+        const auto &prior = active.at(orderingOwners.at(order));
+        return prior.tlp.egress == entry.tlp.egress &&
+               (at_tx ? prior.phase == Phase::Tx : prior.grantSequence != 0);
+    });
+}
+
+void
+SwitchCore::releaseService(Tick now, Id id, size_t bank, size_t channel)
+{
+    readBusy[bank] = false;
+    fabricBusy[channel] = false;
+    if (limits.pipelined) {
+        traceStage(Stage::ReadLaneRelease, now, id, bank);
+    }
+    wake(now);
 }
 
 void
@@ -311,7 +469,7 @@ SwitchCore::grant(Tick now)
         auto &entry = active.at(id);
         const auto &tlp = entry.tlp;
         const uint32_t bank = tlp.ingress % limits.bankCount;
-        if (!ordering.eligible(entry.order)) {
+        if (!canFollow(entry, false)) {
             ++observations.orderingStalls;
             continue;
         }
@@ -325,10 +483,9 @@ SwitchCore::grant(Tick now)
         }
         const bool cross = tlp.ingress / limits.portsPerSlice !=
                            tlp.egress / limits.portsPerSlice;
-        Tick done = after(now, service(entry.cells));
-        if (cross) {
-            done = after(done, limits.crossSliceDelay);
-        }
+        const Tick served = after(now, service(entry.cells));
+        const Tick done =
+            cross ? after(served, limits.crossSliceDelay) : served;
 
         const size_t channel = lane - fabricBusy.begin();
         auto &target = egress[tlp.egress];
@@ -342,7 +499,12 @@ SwitchCore::grant(Tick now)
         lastGrant = entry.key();
         entry.phase = Phase::Fabric;
         entry.grantSequence = ++grants;
-        schedule(done, [this, id, bank, channel, done] {
+        traceStage(Stage::FabricGrant, now, id, channel);
+        const bool release_early = limits.pipelined && served != done;
+        if (limits.pipelined) {
+            wake(now);
+        }
+        auto finish = [this, id, bank, channel, done, release_early] {
             auto &transfer = active.at(id);
             auto queue = voqs.find(transfer.key());
             if (!resources[transfer.tlp.ingress]->release(
@@ -354,24 +516,56 @@ SwitchCore::grant(Tick now)
             if (!queue->second.usedCells) {
                 voqs.erase(queue);
             }
-            transfer.phase = Phase::Staged;
-            transfer.stagedAt = done;
-            auto &staged = egress[transfer.tlp.egress].staged;
-            const auto sort_key = [this](Id id) {
-                const auto &entry = active.at(id);
-                return std::pair(entry.stagedAt, entry.grantSequence);
-            };
-            staged.insert(std::upper_bound(staged.begin(), staged.end(), id,
-                                           [&](Id lhs, Id rhs) {
-                                               return sort_key(lhs) <
-                                                      sort_key(rhs);
-                                           }),
-                          id);
-            readBusy[bank] = false;
-            fabricBusy[channel] = false;
+            if (!release_early) {
+                releaseService(done, id, bank, channel);
+            }
+            traceStage(Stage::FabricDone, done, id, channel);
+            if (limits.egressCdcCycles) {
+                transfer.phase = Phase::EgressCdc;
+                const auto ready = after(
+                    aligned(done, limits.linkCycle),
+                    cycleDelay(limits.linkCycle, limits.egressCdcCycles));
+                schedule(ready, [this, ready, id] { txReady(ready, id); });
+            } else {
+                txReady(done, id);
+            }
             wake(done);
-        });
+        };
+        if (release_early) {
+            serveBeats(now, id, entry.cells, Stage::FabricContinuation,
+                       channel,
+                       [this, served, done, id, bank, channel,
+                        finish = std::move(finish)]() mutable {
+                           releaseService(served, id, bank, channel);
+                           schedule(done, std::move(finish));
+                       });
+        } else if (limits.pipelined) {
+            serveBeats(now, id, entry.cells, Stage::FabricContinuation,
+                       channel, std::move(finish));
+        } else {
+            schedule(done, std::move(finish));
+        }
     }
+}
+
+void
+SwitchCore::txReady(Tick now, Id id)
+{
+    auto &transfer = active.at(id);
+    transfer.phase = Phase::Staged;
+    transfer.stagedAt = now;
+    traceStage(Stage::TxReady, now, id, transfer.tlp.egress);
+    auto &staged = egress[transfer.tlp.egress].staged;
+    const auto sort_key = [this](Id id) {
+        const auto &entry = active.at(id);
+        return std::pair(entry.stagedAt, entry.grantSequence);
+    };
+    staged.insert(std::upper_bound(staged.begin(), staged.end(), id,
+                                   [&](Id lhs, Id rhs) {
+                                       return sort_key(lhs) < sort_key(rhs);
+                                   }),
+                  id);
+    wake(now);
 }
 
 void
@@ -380,7 +574,7 @@ SwitchCore::transmitStaged(Tick now)
     for (auto &output : egress) {
         for (auto it = output.staged.begin(); it != output.staged.end();) {
             auto &entry = active.at(*it);
-            if (!ordering.eligible(entry.order)) {
+            if (!canFollow(entry, true)) {
                 ++it;
                 continue;
             }
@@ -393,6 +587,7 @@ SwitchCore::transmitStaged(Tick now)
                 continue;
             }
             entry.phase = Phase::Tx;
+            traceStage(Stage::TxAccepted, now, entry.tlp.id, entry.tlp.egress);
             output.used[classIndex(entry.tlp.type)] -= entry.cells;
             stagingReserved -= entry.cells;
             entry.tlp.payload.reset();
@@ -425,9 +620,15 @@ std::vector<std::string>
 SwitchCore::waits() const
 {
     constexpr std::array owner{
-        "rx/admission",           "core/write-bank",
-        "voq/fabric-arbitration", "fabric/staging-reservation",
-        "staging/downstream-tx",  "serializer/ordering-commit",
+        "rx/admission",
+        "core/write-bank",
+        "voq/fabric-arbitration",
+        "fabric/staging-reservation",
+        "staging/downstream-tx",
+        "serializer/ordering-commit",
+        "rx/parser",
+        "rx/ingress-cdc",
+        "staging/egress-cdc",
     };
     std::vector<std::string> result;
     for (const auto &[id, entry] : active) {
@@ -446,7 +647,7 @@ SwitchCore::empty() const
     const auto report = counts();
     return !report.transfers && !report.coreDescriptors &&
            !report.stagedCells && rx.empty() && voqs.empty() &&
-           ordering.empty() && !servicePending;
+           ordering.empty() && orderingOwners.empty() && !servicePending;
 }
 
 } // namespace gem5::pcie

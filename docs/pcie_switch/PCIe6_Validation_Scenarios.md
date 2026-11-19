@@ -197,6 +197,74 @@ TLP。4 KiB 子例缩小为 1 Tag、1 descriptor、4 sectors 和 1 个
 Fabric 通道。排空后 functional 读比较目标字节，映射外 atomic
 检查必须返回错误且没有 Link 传输或性能计数。
 
+### M3-01 FLIT 编码与装填用例
+
+- V-16a 对照 Mem32/Mem64、CplD 和带 OHC-A5 的 UR/CA Cpl：
+  逐字节验证类型、TC、Length=0 的 1024 DW 语义、Requester/
+  Completer ID、Tag、地址和 Byte Count。低于 4 GiB 使用 Mem32。
+- V-16b 两个 TLP 接在一起跨第 235 字节，无额外填充；下个 FLIT
+  从续传字节开始。确认每半不超过 8 个非 NOP（含续传）。
+  空闲处的 NOP 补到下一个 4 DW 边界或本 FLIT 末尾。
+- V-16c 显式 flush 后拆分 256 B 的 TLP/DLP/CRC/FEC 区，验证
+  236/6/8/6 B 槽位。校验/重放与注错在后续 V-18 单列。
+
+规范依据本地 Base Spec §2.2.1.2（印刷页122–133）、§2.2.5.2
+（152）、§2.2.7.2（168–169）、§2.2.9.2（198–199）及
+§4.2.3.3–4.2.3.4.1（351–358）。
+
+### M3-02 Shared FC 分组与归还用例
+
+- V-17a 未合并 P 窗口 H=4/D=4，17 B 与 32 B 依次消耗
+  同组余量。任何先归还的单笔都不能单独恢复该组。直到两笔的
+  RX 释放和对应 Update 均到达，才恢复 H=4/D=4。
+- V-17b P/Cpl 合并 H=8/D=8 时，P 与 Cpl 共享容量，不能
+  借用对方已打开组的余量。NP 仍各以 4 为粒度。
+- V-17c VC0 限制为共享窗口的 4/8，VC1 独立使用剩余容量。测试
+  专用信用回退、先到的专用信用归还优先，以及无 RX Shared 的
+  专用路径。非法 VC、重复 ID 和不匹配的 Update 拒绝。
+
+依据本地 Base Spec §2.6.1（印刷页241–242）及 §3.4.1 Table 3-2
+（271–272）。单元采用有限、已初始化的账本，部分组在最后一个
+RX owner 释放时关组，Update 为协调抽象事件。运行时另行核对
+声明的能力、更新粒度及 DLP 时序。
+
+### M3-03 Standard Replay 窗口用例
+
+- V-18a 保护窗口容量 2。发出序号 1、2，第三帧阻塞。帧 1
+  校验失败且帧 2 先到时均不交付。累计 NAK=1023 后按 1、2
+  重发，原 TLP 区不变。ACK=1 仅释放一格，ACK=2 才排空。
+- V-18b 已接收 1 但丢失 ACK，超时只重新调度受保护副本。
+  再到的 1 只回 ACK，交付仍为一次。跨 1023→1 的累计 ACK
+  和窗口外 ACK 也逐项验证。
+- V-18c 独立核对 DLP0/1 的 Flit Usage、Prior Payload、
+  Replay Command 与 10-bit 累计序号字段。运行时另测重发的
+  线速占用、延迟、可重复注错和解除等待。
+
+初始窗口用例从 post-init、正常传输态出发。依据本地 Base Spec
+§4.2.3.4.2.1（印刷页362–383），首版选择 Standard Replay，
+Selective Replay 与训练期隐式序号同步单独标记缺能力。
+CRC 单测对比 Appendix K.2 的独立 basis bytes，并改变 TLP、DLP 或
+CRC 字节触发拒绝。FEC 区与 CRC 区独立，FEC 允许故障/延迟抽象。
+
+V-18d 定时链路每周期 64 B、周期 10 tick，FLIT 串行化为 40 tick。
+76 B 的 Mem32 Write 在 tick 0 接管，tick 10 开始发送，末字节
+位于第二拍，tick 30 标记一次发出。首 FLIT 在 tick 55 被 CRC
+拒绝，NAK 于 tick 70 返回，原序号和 payload 在 tick 70–110
+重新占用串行器，tick 115 首次交付。tick 115 释放 RX 后，直到
+tick 135 信用更新到达才允许新 TLP。两次数据 FLIT 共占 80 tick。
+
+V-18e 用只容纳一格的重放窗口注入首 ACK 丢失，避免后续累计
+ACK 掩盖故障。超时复用原副本，接收端只更新确认状态。原生用例
+分别跑无错 Shared、无错 Dedicated、首 FLIT CRC 故障与丢首 ACK，
+均逐字节校验跨页读写和每跳 TLP 数。
+
+V-18f 配对方向每个 FLIT 占 40 tick，单向传播 5 tick。反向
+NOP ACK 在 tick 70–110 占线，将同一方向的 payload 首次可接收
+时刻从 115 推迟到 155。独立检查 NOP 不增加数据序号或 replay
+项，以及三帧可被同一累计 ACK 确认。CRC/丢 ACK 在配对原生
+路径重跑。另保留延迟回程对照；两种配置的 FC Update 均为协调
+事件。
+
 ## 4. expected、时间和覆盖合同
 
 - 数据、身份、错误状态、分段字节及容量整数精确比较；浮点/时间量化
@@ -244,6 +312,22 @@ Cell-lane容量差异、Tag/FC/replay窗口限制。V-24逐P-ID验证达标、�
 缺能力、测点不可比、未运行及样本不足，不以DUT峰值反推分母。
 64B/9口旧Fabric配置应暴露瓶颈，不因只有纸面raw speedup就通过；
 V-10加入保守ordering造成跨出口HOL而影响SW-PERM目标的反例。
+
+V-35 原生单跳 fixture 使用 2 ns link、1 ns core、各 2 个 CDC
+周期，首短包的 12 个独立阶段时刻为
+`39/40/42/44/45/46/46/47/47/52/53/56 ns`。其中读服务和
+Fabric release 均为 47 ns；staging 直到 TX 接受才归还。
+多拍 fixture 以 144 B/64 B Cell、每拍 1 Cell，验证写中间拍
+20/30 tick、读中间拍 60/70 tick，拥堵时仍持有完整 staging。
+同出口前序可并行进入 Fabric，跨出口前序保持物理发出依赖。
+
+SW-PERM 将每个端口连接到独立 Requester/Completer 地址窗。
+同 Slice 在各三个端口内轮换，跨 Slice 轮换三口，每个目的
+恰有一个来源。读用例分别检查请求和 Completion 方向。九通道
+与三通道保持相同流量和分母，用每周期 grant 上限解释差异。
+SW-TAIL 使用同路由空载和按 70% 独立参考速率发送的两套输入，
+每流三个各 400 笔的入窗 cohort，按入口选样并计删失。窗口内
+发起、入核、离核和目的完成量必须稳定，同时核对两级积压边界。
 
 数值目标不改变数据正确性：任何协议/身份/字节错误先FAIL；性能判据
 另报。P-04/P-13缺PHY/endpoint证据不可PASS，P-11/12缺目标输入明确待定。

@@ -29,6 +29,7 @@
 #ifndef __DEV_PCI_PCIE_TIMING_HH__
 #define __DEV_PCI_PCIE_TIMING_HH__
 
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <map>
@@ -37,6 +38,7 @@
 #include <vector>
 
 #include "dev/pci/pcie/endpoint_memory.hh"
+#include "dev/pci/pcie/flit_link.hh"
 #include "dev/pci/pcie/switch_core.hh"
 #include "mem/port.hh"
 #include "params/PcieTiming.hh"
@@ -45,7 +47,7 @@
 namespace gem5::pcie
 {
 
-/** Native event integration for a transparent chain and a synthetic target. */
+/** Native event integration for transparent synthetic PCIe topologies. */
 class PcieTiming : public ClockedObject
 {
   public:
@@ -68,6 +70,7 @@ class PcieTiming : public ClockedObject
     }
     std::map<std::string, uint64_t> report() const;
     std::vector<std::string> waitGraph() const;
+    const std::vector<std::array<uint64_t, 5>> &coreTrace() const;
 
   private:
     class CpuPort : public ResponsePort
@@ -101,6 +104,8 @@ class PcieTiming : public ClockedObject
         uint64_t accepted = 0;
         uint64_t writes = 0;
         uint64_t reads = 0;
+        uint64_t completedWritePackets = 0;
+        uint64_t completedPayloadBytes = 0;
     };
 
     struct Request
@@ -109,6 +114,7 @@ class PcieTiming : public ClockedObject
         Op op;
         size_t source;
         Addr base;
+        uint32_t bytes;
         std::vector<ByteRange> segments;
         ForwardTlp::Payload data;
         size_t next = 0;
@@ -128,13 +134,38 @@ class PcieTiming : public ClockedObject
         uint8_t lowerAddress = 0;
 
         uint32_t dataBytes() const;
-        uint32_t headerBytes() const;
+        uint32_t headerBytes(bool detailed = false) const;
+    };
+
+    struct Direction
+    {
+        std::unique_ptr<LinkDirection> tlp;
+        std::unique_ptr<FlitLink> flit;
+        std::array<uint64_t, 3> accepted{};
+        uint64_t tlpBytes = 0;
+        uint64_t dataBytes = 0;
+        uint64_t creditStalls = 0;
+        uint64_t busyStalls = 0;
+
+        bool empty() const;
+        bool release(Tick now, Id id);
     };
 
     struct DirectionPair
     {
-        std::unique_ptr<LinkDirection> forward;
-        std::unique_ptr<LinkDirection> reverse;
+        Direction forward;
+        Direction reverse;
+    };
+
+    struct Target
+    {
+        std::deque<Id> rx;
+        std::deque<Id> completions;
+        bool busy = false;
+        bool pauseStarted = false;
+        bool paused = false;
+        uint64_t received = 0;
+        uint64_t served = 0;
     };
 
     void defer(Tick when, LinkDirection::Event action,
@@ -146,20 +177,24 @@ class PcieTiming : public ClockedObject
     void queueResponse(Id parent);
     void sendResponses(Source &source);
     void inject(size_t index);
-    void serveTarget();
-    void sendCompletions();
-    void targetDone(Id id);
+    void receiveTarget(size_t index, Id id);
+    void serveTarget(size_t index);
+    void sendCompletions(size_t index);
+    void targetDone(size_t index, Id id);
     void sourceCompletion(size_t index, Id id);
     void arrive(size_t edge, bool forward, Id id);
+    void arriveFlit(size_t edge, bool forward, Id id, const FlitTlp &packet);
     void departure(size_t edge, bool forward, Id id);
     void progressDrain();
     void finishPiece(Id parent, bool failed);
     void retire(Id parent);
     Id makeMessage(Message message);
-    LinkDirection &link(size_t edge, bool forward);
+    Direction &link(size_t edge, bool forward);
+    FlitTlp makeFlitTlp(const Message &msg) const;
     SendResult transmit(size_t edge, bool forward, Id id);
     std::optional<ReadKey> allocateTag(size_t index, ByteRange range);
-    size_t targetEdge() const;
+    size_t targetEdge(size_t index = 0) const;
+    size_t targetForAddress(Addr address) const;
     std::optional<size_t> sendingCore(size_t edge, bool forward) const;
 
     const PcieTimingParams &settings;
@@ -167,20 +202,18 @@ class PcieTiming : public ClockedObject
     EndpointMemory memory;
     ReadTracker tracker;
     std::vector<Source> sources;
+    std::vector<Target> targets;
     std::vector<DirectionPair> links;
     std::vector<std::unique_ptr<SwitchCore>> cores;
     std::map<Id, Request> requests;
     std::map<Id, Message> messages;
-    std::deque<Id> targetQueue;
-    std::deque<Id> completionQueue;
     Id nextId = 1;
     bool pumpPending = false;
-    bool targetBusy = false;
-    bool targetPauseStarted = false;
-    bool targetPauseActive = false;
     size_t nativeEvents = 0;
     uint64_t writes = 0;
     uint64_t reads = 0;
+    std::vector<std::array<uint64_t, 5>> coreEvents;
+    uint64_t traceDropped = 0;
     uint64_t accepted = 0;
     uint64_t requestStalls = 0;
     uint64_t responseStalls = 0;

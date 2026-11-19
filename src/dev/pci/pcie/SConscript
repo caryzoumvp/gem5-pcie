@@ -47,3 +47,22 @@ SimObject('PcieTiming.py', sim_objects=['PcieTiming'])
 Source('timing.cc')
 SimObject('PcieTrafficTester.py', sim_objects=['PcieTrafficTester'])
 Source('traffic_tester.cc')
+SimObject('PcieBenchmark.py', sim_objects=['PcieBenchmark'])
+Source('benchmark.cc')
+
+Source('flit_tlp.cc')
+Source('flit_packer.cc')
+GTest('pcie_flit_tlp.test', 'flit_tlp.test.cc', 'flit_tlp.cc',
+      'flit_packer.cc')
+GTest('pcie_flit_packer.test', 'flit_packer.test.cc', 'flit_packer.cc')
+Source('flit_replay.cc')
+GTest('pcie_flit_replay.test', 'flit_replay.test.cc', 'flit_replay.cc')
+Source('flit_integrity.cc')
+GTest('pcie_flit_integrity.test', 'flit_integrity.test.cc',
+      'flit_integrity.cc')
+Source('shared_fc.cc')
+GTest('pcie_shared_fc.test', 'shared_fc.test.cc', 'shared_fc.cc')
+Source('flit_link.cc')
+GTest('pcie_flit_link.test', 'flit_link.test.cc', 'flit_link.cc',
+      'flit_packer.cc', 'flit_tlp.cc', 'flit_integrity.cc', 'flit_replay.cc',
+      'shared_fc.cc')

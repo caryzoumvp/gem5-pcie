@@ -51,6 +51,7 @@ def main():
     variant = parser.add_mutually_exclusive_group()
     variant.add_argument("--one-cell", action="store_true")
     variant.add_argument("--tiny-baseline", action="store_true")
+    parser.add_argument("--flit", action="store_true")
     args = parser.parse_args()
 
     system = System(mem_mode="timing")
@@ -67,6 +68,8 @@ def main():
         data_credits=8,
         endpoint_cycles=20,
         endpoint_hold_cycles=250,
+        flit_detail=args.flit,
+        shared_fc=args.flit,
     )
     tiny = args.one_cell or args.tiny_baseline
     data_size = 32 if tiny else 516
@@ -165,6 +168,12 @@ def main():
 
     if final["response_stalls"] != SOURCE_COUNT:
         raise RuntimeError("PCIe incast did not exercise each response retry")
+    if args.flit and (
+        final["flit_shared_admissions"] == 0
+        or final["flit_replayed"]
+        or final["flit_crc_errors"]
+    ):
+        raise RuntimeError("PCIe incast FLIT counters did not match clean FC")
     print("PCIe timing incast test passed")
 
 
