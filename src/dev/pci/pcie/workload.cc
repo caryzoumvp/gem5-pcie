@@ -28,12 +28,15 @@
 
 #include "dev/pci/pcie/workload.hh"
 
+#include <dlfcn.h>
+
 #include <algorithm>
 #include <memory>
 
 #include "base/logging.hh"
 #include "dev/pci/pcie/timing.hh"
 #include "mem/request.hh"
+#include "sim/core.hh"
 #include "sim/system.hh"
 
 namespace gem5::pcie
@@ -61,11 +64,19 @@ Workload::Workload(const PcieWorkloadParams &p)
     : ClockedObject(p),
       dut(*p.dut),
       requestorId(p.system->getRequestorId(this)),
+      externalFlowLimit(p.external_flow_limit),
       // Process workload releases after the timing fabric services this tick.
       serviceEvent([this] { service(); }, name() + ".service", false,
-                   Event::Default_Pri + 2)
+                   Event::Default_Pri + 2),
+      callbackEvent([this] { processCallback(); }, name() + ".callback", false,
+                    Event::Default_Pri + 1)
 {
     const size_t count = p.flow_ids.size();
+    fatal_if(externalFlowLimit && count,
+             "%s: static and external flow drivers are mutually exclusive",
+             name());
+    fatal_if(!p.external_library.empty() && !externalFlowLimit,
+             "%s: a native workload requires a positive flow limit", name());
     fatal_if(
         p.source_indices.size() != count || p.addresses.size() != count ||
             p.transfer_bytes.size() != count || p.writes.size() != count ||
@@ -114,6 +125,106 @@ Workload::Workload(const PcieWorkloadParams &p)
     }
 }
 
+Workload::~Workload()
+{
+    if (callbackEvent.scheduled()) {
+        deschedule(callbackEvent);
+    }
+    if (serviceEvent.scheduled()) {
+        deschedule(serviceEvent);
+    }
+    callbacks.clear();
+    if (client.destroy) {
+        client.destroy(client.context);
+    }
+    if (clientLibrary) {
+        dlclose(clientLibrary);
+    }
+}
+
+bool
+Workload::submit(size_t source, size_t destination, Addr offset,
+                 unsigned bytes, bool write, uint8_t pattern,
+                 Completion source_done, Completion destination_done)
+{
+    if (flows.size() >= externalFlowLimit || source >= ports.size() ||
+        source == destination) {
+        return false;
+    }
+    const auto address = dut.treeTransferAddress(destination, offset, bytes);
+    if (!address) {
+        return false;
+    }
+    const size_t index = flows.size();
+    flows.push_back(
+        {source, *address, bytes, write, pattern, curTick(), 0, {}});
+    flows.back().sourceDone = std::move(source_done);
+    flows.back().destinationDone = std::move(destination_done);
+    flows.back().destination = destination;
+    releases.emplace(curTick(), index);
+    scheduleService();
+    return true;
+}
+
+bool
+Workload::submitExternal(size_t source, size_t destination, Addr offset,
+                         unsigned bytes, bool write, uint8_t pattern)
+{
+    return submit(source, destination, offset, bytes, write, pattern, {}, {});
+}
+
+bool
+Workload::scheduleExternal(Tick when, std::function<void()> callback)
+{
+    if (controlCallbacks >= externalFlowLimit || !callback ||
+        when < curTick() || when == MaxTick) {
+        return false;
+    }
+    ++controlCallbacks;
+    enqueueCallback(when, [this, callback = std::move(callback)] {
+        --controlCallbacks;
+        callback();
+    });
+    return true;
+}
+
+void
+Workload::enqueueCallback(Tick when, std::function<void()> callback)
+{
+    callbacks[when].push_back(std::move(callback));
+    if (!callbackEvent.scheduled()) {
+        schedule(callbackEvent, when);
+    } else if (callbackEvent.when() > when) {
+        reschedule(callbackEvent, when);
+    }
+}
+
+void
+Workload::processCallback()
+{
+    auto it = callbacks.begin();
+    auto callback = std::move(it->second.front());
+    it->second.pop_front();
+    if (it->second.empty()) {
+        callbacks.erase(it);
+    }
+    if (!callbacks.empty()) {
+        schedule(callbackEvent, callbacks.begin()->first);
+    }
+    callback();
+}
+
+void
+Workload::notify(Completion &callback, bool success)
+{
+    if (callback) {
+        const auto tick = curTick();
+        enqueueCallback(tick, [handler = std::move(callback), tick, success] {
+            handler(tick, success);
+        });
+    }
+}
+
 Port &
 Workload::getPort(const std::string &if_name, PortID idx)
 {
@@ -139,7 +250,63 @@ void
 Workload::startup()
 {
     ClockedObject::startup();
+    if (!static_cast<const PcieWorkloadParams &>(params())
+             .external_library.empty()) {
+        startExternal();
+    }
     scheduleService();
+}
+
+bool
+Workload::finished() const
+{
+    const int status = client.status ? client.status(client.context) : 1;
+    fatal_if(status < 0, "%s: native workload failed", name());
+    return status == 1 && finishedFlows == flows.size() && callbacks.empty();
+}
+
+void
+Workload::startExternal()
+{
+    const auto &p = static_cast<const PcieWorkloadParams &>(params());
+    clientLibrary = dlopen(p.external_library.c_str(), RTLD_NOW | RTLD_LOCAL);
+    fatal_if(!clientLibrary, "%s: loading PCIe workload client: %s", name(),
+             dlerror());
+    auto open_client =
+        reinterpret_cast<Gem5PcieOpen>(dlsym(clientLibrary, "gem5_pcie_open"));
+    fatal_if(!open_client, "%s: missing gem5_pcie_open: %s", name(),
+             dlerror());
+    const Gem5PcieHost host{
+        GEM5_PCIE_WORKLOAD_ABI,
+        this,
+        static_cast<uint32_t>(ports.size()),
+        sim_clock::as_int::s,
+        [](void *) -> uint64_t { return curTick(); },
+        [](void *ctx, uint64_t when, Gem5PcieEvent fun, void *arg) -> int {
+            return fun && static_cast<Workload *>(ctx)->scheduleExternal(
+                              when, [fun, arg] { fun(arg); });
+        },
+        [](void *ctx, uint32_t src, uint32_t dst, uint64_t offset,
+           uint32_t bytes, int write, uint8_t pattern, Gem5PcieCompletion sent,
+           Gem5PcieCompletion received, void *arg) -> int {
+            const auto bind = [arg](Gem5PcieCompletion fun) -> Completion {
+                if (!fun) {
+                    return {};
+                }
+                return [fun, arg](Tick tick, bool ok) { fun(arg, tick, ok); };
+            };
+            return static_cast<Workload *>(ctx)->submit(
+                src, dst, offset, bytes, write, pattern, bind(sent),
+                bind(received));
+        },
+        [](void *ctx, const char *reason) {
+            fatal("%s: native PCIe workload: %s",
+                  static_cast<Workload *>(ctx)->name(), reason);
+        },
+    };
+    fatal_if(open_client(&host, p.external_config.c_str(), &client) != 1 ||
+                 !client.status || !client.destroy,
+             "%s: native PCIe workload client setup failed", name());
 }
 
 void
@@ -232,6 +399,10 @@ Workload::receive(PortID source, PacketPtr pkt)
         }
         flow.completed = curTick();
     }
+    notify(flow.sourceDone, !flow.failed);
+    if (!flow.write) {
+        notify(flow.destinationDone, !flow.failed);
+    }
     const auto id = pkt->id;
     delete pkt;
     retire(id);
@@ -248,6 +419,7 @@ Workload::visible(PacketId id, bool success)
              "Unexpected PCIe workload Write visibility");
     flow.completed = curTick();
     flow.failed |= !success;
+    notify(flow.destinationDone, !flow.failed);
     retire(id);
 }
 
@@ -318,6 +490,21 @@ Workload::linkTrace() const
         trace.push_back({index, edge, forward, uint64_t(type), count});
     }
     return trace;
+}
+
+std::vector<std::array<uint64_t, 7>>
+Workload::externalFlows() const
+{
+    std::vector<std::array<uint64_t, 7>> specs;
+    if (externalFlowLimit) {
+        specs.reserve(flows.size());
+        for (const auto &flow : flows) {
+            specs.push_back({flow.source, flow.destination, flow.address,
+                             flow.bytes, flow.write, flow.pattern,
+                             flow.release});
+        }
+    }
+    return specs;
 }
 
 } // namespace gem5::pcie

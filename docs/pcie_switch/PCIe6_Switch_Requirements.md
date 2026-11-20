@@ -428,9 +428,9 @@ A-03外链信用与内部额度独立；A-04显式容量/自动建议/峰值分�
 backend版本、seed、单位和测量合同。旧字段中的估算和浏览器仿真不能
 标成实测校准。`readRttNs=null`和`sim=null`是合法状态。
 
-硬件页目前只导出该JSON，不提供gem5结果导入；这是新增adapter交付项。
-顶栏workspace `{schema:1, config, versions, evidence}`是另一格式，
-不得声称其现有导入能接收hardware-calibration或gem5 ResultBundle。
+硬件页导出该 JSON，并通过独立入口导入 gem5 ResultBundle。
+验证记录保留结果文件内的配置快照。顶栏 workspace 使用
+`{schema:1, config, versions, evidence}` 格式。
 
 ### 8.2 需求分析与辅助页面
 
@@ -610,9 +610,13 @@ case无FAIL/skip/xfail、required bins全命中、数据/身份/资源错误为0
 ### 12.4 交付状态与规模边界
 
 SIM-01 的归档 gem5 周期 profile 已通过 V-35 和 M3 所选协议验收。
-SIM-02–SIM-16 的集成仍待交付。交付包括
-两仓库版本化API/FlowIR/结果合同、可执行TDD场景、gem5 runtime facade、
-SimAI PcieNetwork/构建入口、collective/workload fixtures及回归报告。
+SIM-02–SIM-16 的首版集成使用版本化的同进程客户端接口。
+验收覆盖原生 2/8 rank Ring、显式 Tree、级联 Read/Write、incast、
+Host staging、不均匀 MoE Dispatch/Combine 和各工作负载的计算
+与通信依赖。原生训练为 world placement，显式 DAG 可提供
+communicator scope 和计算事件。性能适用于固定模拟 profile。
+未提供 token 级测量边界的案例输出通信与任务时刻。
+实测范围及复现命令见 [M4B 验收](validation/M4B.md)。
 
 大规模可后续使用经周期模型校准的加速profile，但须独立标精度和适用
 范围，按消息大小/并发/Read-Write/拓扑/热点给出误差；只导出单一BW/

@@ -688,14 +688,15 @@ NS3前端和SimCCL架构。该文档提出的统一实验描述、FlowIR、完�
 |---|---|---|
 | SimAI | 模型/compute与通信依赖、rank、任务推进 | 不直接操纵PCIe信用、VOQ或TLP Tag |
 | SimCCL | collective算法、channel/chunk/flow与依赖 | 不是实际GPU kernel，不替代PCIe数据面 |
-| `PcieNetwork`（计划） | AstraNetworkAPI、消息匹配、FlowIR、callback生命周期 | 不拥有独立网络时间/独立Switch模型 |
+| SimAI PCIe `Network` / `Session` | AstraNetworkAPI、消息匹配、流映射、callback 生命周期 | 不拥有独立网络时间或独立 Switch 模型 |
 | gem5 PCIe runtime | DMA/TLP、端点、Link、Switch、FC/replay、周期争用 | 不用固定带宽公式替代实际资源服务 |
 | result adapter | workload/flow/transaction/cycle trace关联 | 不把估算、cycle模型和实测混标 |
 
-当前API的BackendType为NotSpecified/Garnet/NS3/Analytical，无PCIe；
-实际方法名为`sim_get_time`。SimCCL flowTag已有algorithm/protocol/channel/
-chunk等字段，算法可能依赖NVSwitch能力，NS3路径存在send_lat表。
-这些是本次源码核查结果，不表示PCIe adapter已存在。
+SimAI 的 `AstraNetworkAPI::BackendType` 增加 `PCIe`，时间入口为
+`sim_get_time`。原生 SimCCL 使用 flowTag 的 algorithm、protocol、
+channel、chunk 和 flow ID。匹配后分别把所需元数据送入发端和收端
+callback，收端据此推进原始 SimCCL 依赖。NVLS 算法选择与 NVSwitch
+通道初始化均检查拓扑能力。
 
 ### 11.2 顺序与周期验收门
 
@@ -788,14 +789,31 @@ Diffusion DAG。有完整依赖才称闭环；仅CSV flow replay只报告通信�
 
 ### 11.6 两仓库实现与扩展边界
 
-拟gem5侧增加runtime facade和SimAI桥接入口，暴露register endpoint、
-submit flow、schedule callback、query time、drain/report；实现复用同一
-PcieLink/Switch/Endpoint及资源状态。不要通过CMake重新复制一个pcie-sim。
+gem5 的 `PcieWorkload` 复用 M4A 的 requester 端口、Packet 所有权、
+retry、route 记录和 Write 可见 observer。`cycle.py` 根据
+`ExperimentSpec.simai` 选择原生驱动，在实例化前验证 rank 到地址
+窗口的映射和 slot 预算。静态 workload 与原生客户端各自独占 driver。
 
-拟SimAI侧新增`network_frontend/pcie/PcieNetwork.*`、入口/构建模式和
-BackendType分支。SCons与CMake由小型link/smoke场景验证边界；固定两库
-commit与SimCCL版本，不修改构建临时复制目录作为持久实现。
-本次只更新gem5工作区文档，未修改SimAI仓库或创建上述源文件。
+SCons 构建 gem5，SimAI 的 `build/simai_pcie` CMake 入口构建
+`libSimAI_pcie.so`，由 `PcieWorkload::startup` 载入同一进程。
+`workload_client.h` 约定 ABI 版本、时钟、相对事件的绝对 Tick 提交、
+字节段及源/目的回调。调度和回调共享 gem5 事件队列，同 Tick FIFO。
+普通 TimingPort 接管、报文身份、FLIT 资源与排空仍由同一硬件实现负责。
+
+SimAI 的 `network_frontend/pcie/PcieNetwork.cc` 管理 rank 和匹配。
+原生训练由 `Sys` / `Workload` / SimCCL 驱动，显式
+`PCIE_DAG_V1` 用相同的匹配层执行 Read pull、Tree、Host staging
+及 MoE。匹配记录和每目标内存 slot 有独立上限。单个消息以同一
+slot 串行分段，下一段在上一段本地响应和目的完成后提交，
+收到全消息后且有匹配接收时才交付。已交付消息的 slot 和匹配记录
+归还事件独立，允许 data-first 到达后等待接收注册。
+
+`cycle-result.json` 保留 M4A 格式和实际硬件测点。SimAI 消息、任务
+及 transfer ID 通过 `simai-messages.tsv` 和 `simai-tasks.tsv`
+关联，请求记录中的逐跳 TLP 计数可以与独立 replay 精确对照。
+超时结果保存未结束 rank、待匹配计数及 wait graph，终止由 rank、
+callback、流和硬件共同决定。可执行示例与版本证据见
+[M4B 验收](validation/M4B.md)。
 
 大规模默认不能将单一空载BW/latency表视作cycle模拟替代。后续加速后端
 需按大小、并发、Read/Write、拓扑和热点校准，并标独立精度；小场景同源

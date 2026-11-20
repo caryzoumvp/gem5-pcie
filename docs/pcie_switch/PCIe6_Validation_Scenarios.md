@@ -324,6 +324,18 @@ M4B 的 V-30 使用 M4A 的 V-36/37 配置和独立实际完成 trace 作同路�
 V-32分Train、Prefill、Decode、Diffusion和MoE子fixture，分别覆盖
 无争用/受控争用、完成依赖和输入compute profile；缺失子case不计覆盖。
 
+- **M4B 原生运行对照**：2/8 rank Ring 每层 tensor 为 32 KiB，
+  共两层。各 rank 每层发送 `2 × (N−1) × 32768 / N` B，
+  只向 Ring 下一 rank 发送。每个消息的 send、recv、源可复用、
+  全部可见、匹配交付各一次。将实际释放时刻重放到独立 gem5，
+  逐段比较接管、响应、完成和逐跳计数。8 rank 变慢链路应推迟
+  后续层和最后一个 rank 的结束时刻。
+- **M4B 显式任务对照**：同源同目的重复 tag 检查 FIFO，不同
+  scope/channel 允许独立匹配。提前和延后注册接收各运行一次。
+  Write 在目标可见后交付，Read 由接收 rank 请求并等齐 CplD。
+  四 rank Tree 归约与广播保留明确的边、逐点计算延迟和完成依赖。
+  MoE 用不均匀的目的 token 数和反向合并检查每条流的字节守恒。
+
 ## 7. 性能目标的required子case
 
 需求§6.4–6.6/硬件架构§12定义P-01–P-13。M3之前为V-23/24/35固定

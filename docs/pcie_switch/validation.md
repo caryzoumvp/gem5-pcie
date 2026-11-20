@@ -46,8 +46,16 @@ python3 util/pcie_lab/validate.py --skip-build --output-dir /tmp/pcie-validation
 Shared FC TX 缺能力负例必须返回指定配置错误。其他意外结果使脚本
 非零退出，并打印对应日志位置。
 
-M4B SimAI 闭环和 M5 扩展的验收边界见 [实施计划](PCIe6_Implementation_Plan.md) 和
-[验证场景](PCIe6_Validation_Scenarios.md)。
+## M4B SimAI 闭环
+
+```sh
+python3 util/pcie_lab/validate_simai.py --simai-root /workspaces/SimAI \
+    --output-dir output/pcie-simai
+```
+
+先构建 gem5，再用上述命令构建 SimAI PCIe 库并执行原生闭环、
+同路径重放和离线 HTML 回归。完整旧后端回归的参数、测点与产物见
+[M4B 验收](validation/M4B.md)。
 
 ## 运行一个导出的周期实验
 

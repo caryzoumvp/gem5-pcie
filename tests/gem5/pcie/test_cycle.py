@@ -46,6 +46,7 @@ for case in (
     "collective",
     "timeout",
     "invalid",
+    "external",
 ):
     gem5_verify_config(
         name=f"pcie-cycle-{case}",

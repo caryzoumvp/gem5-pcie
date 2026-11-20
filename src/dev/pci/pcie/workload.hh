@@ -31,6 +31,7 @@
 
 #include <array>
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -40,6 +41,7 @@
 #include <vector>
 
 #include "dev/pci/pcie/tlp.hh"
+#include "dev/pci/pcie/workload_client.h"
 #include "mem/port.hh"
 #include "params/PcieWorkload.hh"
 #include "sim/clocked_object.hh"
@@ -54,21 +56,32 @@ class Workload : public ClockedObject
 {
   public:
     explicit Workload(const PcieWorkloadParams &params);
+    ~Workload() override;
 
     Port &getPort(const std::string &if_name, PortID idx) override;
     void init() override;
     void startup() override;
 
-    bool
-    finished() const
-    {
-        return finishedFlows == flows.size();
-    }
+    bool finished() const;
+    using Completion = std::function<void(Tick, bool)>;
+
+    // On rejection ownership stays with the caller. Offsets are within the
+    // named destination's address window. Callbacks are delivered on the
+    // workload's gem5 queue, after the timing port call has returned.
+    bool submit(size_t source, size_t destination, Addr offset, unsigned bytes,
+                bool write, uint8_t pattern, Completion source_done,
+                Completion destination_done);
+    bool submitExternal(size_t source, size_t destination, Addr offset,
+                        unsigned bytes, bool write, uint8_t pattern);
+    bool scheduleExternal(Tick when, std::function<void()> callback);
     // Rows contain acceptance, local response, and completion ticks, then
     // status (0 pending, 1 passed, 2 failed). MaxTick marks an absent event.
     std::vector<std::vector<Tick>> flowTrace() const;
     // Rows contain flow index, edge, forward flag, TLP class, and count.
     std::vector<std::array<uint64_t, 5>> linkTrace() const;
+    // Rows contain source, destination, address, bytes, write, pattern and
+    // release tick. These are only available for native/dynamic clients.
+    std::vector<std::array<uint64_t, 7>> externalFlows() const;
 
   private:
     class SourcePort : public RequestPort
@@ -111,6 +124,9 @@ class Workload : public ClockedObject
         Tick completed = MaxTick;
         Status status = Pending;
         bool failed = false;
+        Completion sourceDone = {};
+        Completion destinationDone = {};
+        size_t destination = 0;
     };
 
     struct InFlight
@@ -128,16 +144,26 @@ class Workload : public ClockedObject
     void recordLink(PacketId id, size_t edge, bool forward, TlpClass type);
     void retire(PacketId id);
     void finish(size_t index);
+    void enqueueCallback(Tick when, std::function<void()> callback);
+    void processCallback();
+    void notify(Completion &callback, bool success);
+    void startExternal();
 
     PcieTiming &dut;
     const RequestorID requestorId;
+    const size_t externalFlowLimit;
     EventFunctionWrapper serviceEvent;
+    EventFunctionWrapper callbackEvent;
     std::vector<std::unique_ptr<SourcePort>> ports;
     std::vector<Flow> flows;
     std::set<std::pair<Tick, size_t>> releases;
     std::unordered_map<PacketId, InFlight> inFlight;
     std::map<std::tuple<size_t, size_t, bool, TlpClass>, uint64_t> linkCounts;
+    std::map<Tick, std::deque<std::function<void()>>> callbacks;
+    void *clientLibrary = nullptr;
+    Gem5PcieClient client{};
     size_t finishedFlows = 0;
+    size_t controlCallbacks = 0;
 };
 
 } // namespace gem5::pcie

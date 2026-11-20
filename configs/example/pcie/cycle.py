@@ -28,6 +28,8 @@
 """Build and run a configured transparent PCIe tree in native gem5."""
 
 import argparse
+import csv
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -53,7 +55,9 @@ RESULT_FORMAT = "pcie6-cycle-result-v1"
 MAX_TICK = (1 << 64) - 1
 
 
-def build_root(compiled):
+def build_root(
+    compiled, *, external_flow_limit=0, external_library="", external_config=""
+):
     from m5.objects import (
         PcieTiming,
         PcieTreeEndpoint,
@@ -143,6 +147,9 @@ def build_root(compiled):
         releases=[flow["release_ps"] for flow in flows],
         dependency_offsets=offsets,
         dependency_indices=indices,
+        external_flow_limit=external_flow_limit,
+        external_library=str(external_library),
+        external_config=str(external_config),
     )
     for _ in leaves:
         system.workload_driver.ports = system.dut.cpu_side
@@ -210,8 +217,70 @@ def measure_window(config, flows, end_tick):
     return result
 
 
-def run_cycle(compiled):
-    root, runtime = build_root(compiled)
+def native_summary(output, rank_count):
+    waiting_send, waiting_recv, finished = set(), set(), {}
+    messages = output / "simai-messages.tsv"
+    with messages.open() as stream:
+        for row in csv.DictReader(stream, delimiter="\t"):
+            event = row["event"]
+            message = int(row["message"])
+            if event == "send":
+                waiting_send.add(message)
+            elif event == "recv":
+                waiting_recv.add(message)
+            elif event == "delivered":
+                waiting_send.remove(message)
+                waiting_recv.remove(message)
+            elif event == "finish":
+                finished[int(row["src"])] = int(row["tick_ps"])
+
+    summary = {
+        "unfinished_ranks": sorted(set(range(rank_count)) - finished.keys()),
+        "rank_finish_ps": finished,
+        "missing_send": len(waiting_recv - waiting_send),
+        "missing_receive": len(waiting_send - waiting_recv),
+        "pending_messages": len(waiting_send | waiting_recv),
+        "traces": {},
+    }
+    for path in (
+        messages,
+        output / "simai-tasks.tsv",
+        output / "EndToEnd.csv",
+    ):
+        if path.is_file():
+            fingerprint = hashlib.sha256()
+            with path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(65536), b""):
+                    fingerprint.update(chunk)
+            summary["traces"][path.name] = fingerprint.hexdigest()
+    return summary
+
+
+def run_cycle(compiled, *, simai_library=None, simai_workload=None):
+    simai = compiled["input"].get("simai")
+    external = {}
+    if simai is not None:
+        output = Path(m5.options.outdir).resolve()
+        config = output / "simai-client.conf"
+        leaves = [
+            node["id"]
+            for node in compiled["topology"]["nodes"]
+            if node["kind"] != "switch"
+        ]
+        placement = [leaves.index(name) for name in simai["rank_endpoints"]]
+        config.write_text(
+            f"{simai_workload}\n{output}\n"
+            f"{len(placement)} {simai['segment_bytes']} "
+            f"{simai['slots_per_rank']} {simai['pending_limit']}\n"
+            + " ".join(str(index) for index in placement)
+            + "\n"
+        )
+        external = {
+            "external_flow_limit": simai["flow_limit"],
+            "external_library": simai_library,
+            "external_config": config,
+        }
+    root, runtime = build_root(compiled, **external)
     m5.instantiate()
     dut = root.system.dut
     driver = root.system.workload_driver
@@ -244,10 +313,32 @@ def run_cycle(compiled):
                 "tlps": count,
             }
         )
+    offered_flows = compiled["workload"]["flows"]
+    if simai is not None:
+        offered_flows = [
+            {
+                "id": f"pcie-transfer-{index}",
+                "src": leaves[source],
+                "dst": leaves[dest],
+                "address": address,
+                "bytes": size,
+                "operation": "write" if write else "read",
+                "pattern": pattern,
+                "release_ps": release,
+                "depends_on": [],
+            }
+            for index, (
+                source,
+                dest,
+                address,
+                size,
+                write,
+                pattern,
+                release,
+            ) in enumerate(driver.externalFlows())
+        ]
     flows = []
-    for flow, row, links in zip(
-        compiled["workload"]["flows"], rows, observed, strict=True
-    ):
+    for flow, row, links in zip(offered_flows, rows, observed, strict=True):
         accepted, responded, completed, outcome = row
         flows.append(
             {
@@ -268,7 +359,7 @@ def run_cycle(compiled):
         status = (
             "pass" if all(f["status"] == "pass" for f in flows) else "fail"
         )
-    return {
+    result = {
         "format": RESULT_FORMAT,
         "units": UNITS,
         "mode": "pcie6_timing",
@@ -294,17 +385,58 @@ def run_cycle(compiled):
             "coordinated FC updates; analytical reference is separate",
         ],
     }
+    if simai is not None:
+        result["producer"]["simai_client_sha256"] = hashlib.sha256(
+            simai_library.read_bytes()
+        ).hexdigest()
+        result["producer"]["simai"] = json.loads(
+            (output / "simai-build.json").read_text()
+        )
+        result["scope"].append("SimAI workload, abstract payload")
+        result["simai"] = native_summary(output, len(placement))
+        for key in (
+            "unfinished_ranks",
+            "missing_send",
+            "missing_receive",
+            "pending_messages",
+        ):
+            if result["simai"][key]:
+                result["waits"].append(f"simai.{key}={result['simai'][key]}")
+    return result
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("experiment", type=Path)
+    parser.add_argument("--simai-library", type=Path)
+    parser.add_argument("--simai-workload", type=Path)
     args = parser.parse_args()
     try:
         compiled = compile_cycle(json.loads(args.experiment.read_text()))
+        simai = compiled["input"].get("simai")
+        if simai is not None:
+            if not args.simai_library or not args.simai_workload:
+                parser.error(
+                    "SimAI requires --simai-library and --simai-workload"
+                )
+            args.simai_workload = args.simai_workload.resolve(strict=True)
+            args.simai_library = args.simai_library.resolve(strict=True)
+            digest = hashlib.sha256(
+                args.simai_workload.read_bytes()
+            ).hexdigest()
+            if digest != simai["workload_sha256"]:
+                parser.error("SimAI workload does not match workload_sha256")
+        elif args.simai_library or args.simai_workload:
+            parser.error(
+                "the ExperimentSpec is missing the simai configuration"
+            )
     except (ConfigError, OSError, json.JSONDecodeError) as error:
         parser.exit(2, f"PCIe experiment rejected: {error}\n")
-    result = run_cycle(compiled)
+    result = run_cycle(
+        compiled,
+        simai_library=args.simai_library,
+        simai_workload=args.simai_workload,
+    )
     output = Path(m5.options.outdir) / "cycle-result.json"
     output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
     print(f"PCIe cycle result: {output} ({result['status']})")

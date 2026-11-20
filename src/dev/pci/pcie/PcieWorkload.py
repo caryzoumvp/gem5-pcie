@@ -42,6 +42,8 @@ class PcieWorkload(ClockedObject):
         PyBindMethod("finished"),
         PyBindMethod("flowTrace"),
         PyBindMethod("linkTrace"),
+        PyBindMethod("submitExternal"),
+        PyBindMethod("externalFlows"),
     ]
 
     ports = VectorRequestPort("Connections to PCIe timing requester ports")
@@ -60,3 +62,8 @@ class PcieWorkload(ClockedObject):
     dependency_indices = VectorParam.Unsigned(
         "Predecessor flow indices in compressed row order"
     )
+    external_flow_limit = Param.Unsigned(
+        0, "Maximum number of dynamically submitted transfers in a run"
+    )
+    external_library = Param.String("", "Native PCIe workload client library")
+    external_config = Param.String("", "Configuration path passed to client")

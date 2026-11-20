@@ -43,7 +43,7 @@ M4 先交付可独立运行的 gem5/HTML 闭环（M4A），再接入 SimAI
 | M2 | 已验收 | 有限单颗/级联、数据/资源守恒、S-08排空 | F-03/06/17/22，A-01至A-04/07，T-04 |
 | M3 | 完成 | 所选Gen6条款和周期门通过；固定profile的性能目标按用例分别判定 | F-01/02/06/19，T-05 |
 | M4A | 已验收 | HTML 配置驱动 gem5 实际建拓扑并独立运行 workload，结果可导回 HTML，与旧格式兼容 | B-02/03/04/05，F-03/04/09/19/20/21，T-06 前置 |
-| M4B | 待实现 | 同一 gem5 构建器和 runtime 接入 SimAI，完成 collective/DAG 闭环与旧 backend 回归 | B-01/06，F-22，SIM-02–16，T-06 |
+| M4B | 已验收 | 同一 gem5 构建器和 runtime 接入 SimAI，完成 collective/DAG 闭环与旧 backend 回归 | B-01/06，F-22，SIM-02–16，T-06 |
 | M5 | 未开始 | 按extension逐项满足入口与测试合同 | F-05/10至F-16/18/23至F-32，T-07至T-10 |
 
 ## 2. M0：规范、schema与能力合同
@@ -259,6 +259,7 @@ M4B 出口门为 V-27–V-34 全部适用 case 通过。以 M4A 同配置的
 一次，所有 rank 共用 gem5 时间和队列，拥塞能改变后继任务时刻，
 原 backend 回归通过。闭环 TTFT/TPOT/step 需要计算 profile 和
 依赖，缺少时输出通信指标。M4A 和 M4B 分别提交代码、测试和证据。
+V-27–V-34 的执行结果与边界见 [M4B 验收](validation/M4B.md)。
 
 ## 7. M5：补充controller及产品扩展
 

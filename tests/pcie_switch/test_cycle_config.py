@@ -258,3 +258,30 @@ class CycleCompilerTest(unittest.TestCase):
             compiled["topology"]["paths"]["e1"]["root"],
             ["e1", "s1", "root"],
         )
+
+    def test_simai_rank_windows_and_workload_hash(self):
+        base = tree()
+        base["workload"]["flows"].clear()
+        base["simai"] = {
+            "rank_endpoints": ["root", "e1"],
+            "segment_bytes": 1024,
+            "slots_per_rank": 4,
+            "pending_limit": 8,
+            "flow_limit": 16,
+            "workload_sha256": "a" * 64,
+        }
+        compiled = cycle_config.compile_cycle(base)
+        self.assertEqual(compiled["input"]["simai"], base["simai"])
+        for key, value, code in (
+            ("rank_endpoints", ["e1", "e1"], "identity"),
+            ("rank_endpoints", ["root", "s1"], "identity"),
+            ("segment_bytes", 65, "alignment"),
+            ("slots_per_rank", 5, "window"),
+            ("flow_limit", 7, "range"),
+            ("workload_sha256", "x" * 64, "hash"),
+        ):
+            with self.subTest(field=key):
+                invalid = {**base, "simai": {**base["simai"], key: value}}
+                with self.assertRaises(ConfigError) as error:
+                    cycle_config.compile_cycle(invalid)
+                self.assertEqual(error.exception.code, code)

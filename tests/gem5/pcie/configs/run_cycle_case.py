@@ -438,6 +438,45 @@ def invalid():
     assert m5.curTick() == 0
 
 
+def external(library=""):
+    from cycle import build_root
+
+    spec, _, size = linear("chain")
+    spec["workload"]["flows"].clear()
+    root, topology = build_root(
+        compile_cycle(spec), external_flow_limit=2, external_library=library
+    )
+    m5.instantiate()
+    driver = root.system.workload_driver
+    dut = root.system.dut
+    source = topology["endpoints"]["root"]["index"]
+    target = topology["endpoints"]["target"]["index"]
+    if not library:
+        m5.simulate(123)
+        assert not driver.submitExternal(
+            source, target, 1, size, True, PAYLOAD
+        )
+        assert not driver.submitExternal(
+            source, source, 0, size, True, PAYLOAD
+        )
+        assert driver.submitExternal(source, target, 0, size, True, PAYLOAD)
+        # Independent archived M4A chain profile from the static driver.
+        m5.simulate(443_000 - m5.curTick())
+        assert driver.submitExternal(source, target, 0, size, False, PAYLOAD)
+        assert not driver.submitExternal(
+            source, target, 0, size, False, PAYLOAD
+        )
+    m5.simulate(spec["measurement"]["window_ps"] - m5.curTick())
+    write, read = driver.flowTrace()
+    assert tuple(write[:3]) == (123, 1000, 443_000)
+    assert read[0] == write[2] and read[0] < read[1] == read[2]
+    assert read[2] == 990_000
+    assert write[3] == read[3] == 1
+    assert driver.finished() and dut.idle() and not dut.waitGraph()
+    for edge in range(3):
+        edge_counts(dut.report(), edge, (16, 8, 0), (0, 0, 16))
+
+
 def main():
     case = sys.argv[1]
     if case == "invalid":
@@ -446,6 +485,10 @@ def main():
         sys.path.insert(0, str(REPO / "configs/example/pcie"))
         from cycle import run_cycle
 
+        if case == "external":
+            external(sys.argv[2] if len(sys.argv) > 2 else "")
+            print("PCIe cycle external passed")
+            return
         special_cases = {
             "incast": (incast, check_incast),
             "collective": (collective, check_collective),

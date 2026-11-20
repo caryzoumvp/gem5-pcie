@@ -442,6 +442,21 @@ PcieTiming::buildTree()
     }
 }
 
+std::optional<Addr>
+PcieTiming::treeTransferAddress(size_t destination, Addr offset,
+                                unsigned bytes) const
+{
+    if (destination >= treeWindows.size() || !bytes ||
+        bytes > settings.max_transfer || bytes % 4 || offset % 4) {
+        return std::nullopt;
+    }
+    const auto &window = treeWindows[destination];
+    if (offset > window.size() || bytes > window.size() - offset) {
+        return std::nullopt;
+    }
+    return window.start() + offset;
+}
+
 LinkTiming
 PcieTiming::treeLinkTiming(TreeTopology::Direction wire) const
 {

@@ -78,6 +78,8 @@ class PcieTiming : public ClockedObject
         std::function<void(PacketId, size_t, bool, TlpClass)>;
     void setVisibilityObserver(VisibilityObserver observer);
     void setRouteObserver(RouteObserver observer);
+    std::optional<Addr> treeTransferAddress(size_t destination, Addr offset,
+                                            unsigned bytes) const;
 
   private:
     class CpuPort : public ResponsePort

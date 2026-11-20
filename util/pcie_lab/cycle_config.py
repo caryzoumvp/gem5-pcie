@@ -537,6 +537,7 @@ def compile_cycle(document):
         "workload",
         "measurement",
         "lab_inputs",
+        "simai",
     )
     check_keys(document, allowed, "experiment")
     if document.get("format") != FORMAT:
@@ -552,6 +553,60 @@ def compile_cycle(document):
     workload = _compile_workload(
         document.get("workload"), leaves, hardware, measurement
     )
+    simai = document.get("simai")
+    if "simai" in document:
+        check_keys(
+            simai,
+            (
+                "rank_endpoints",
+                "segment_bytes",
+                "slots_per_rank",
+                "pending_limit",
+                "flow_limit",
+                "workload_sha256",
+            ),
+            "simai",
+        )
+        ranks = _array(simai.get("rank_endpoints"), "simai.rank_endpoints")
+        if (
+            len(ranks) < 2
+            or any(
+                not isinstance(rank, str) or rank not in leaves
+                for rank in ranks
+            )
+            or len(set(ranks)) != len(ranks)
+        ):
+            fail("simai.rank_endpoints", "identity", "invalid rank placement")
+        segment = _aligned(
+            simai.get("segment_bytes"),
+            "simai.segment_bytes",
+            4,
+            4,
+            hardware["max_transfer"],
+        )
+        pending = _number(
+            simai.get("pending_limit"),
+            "simai.pending_limit",
+            len(ranks),
+            65536,
+        )
+        slots = _number(
+            simai.get("slots_per_rank"), "simai.slots_per_rank", 1, pending
+        )
+        _number(simai.get("flow_limit"), "simai.flow_limit", pending, 1 << 20)
+        if any(leaves[rank]["size"] < segment * slots for rank in ranks):
+            fail(
+                "simai.slots_per_rank", "window", "slot capacity exceeds size"
+            )
+        if workload["flows"]:
+            fail("workload.flows", "unsupported", "SimAI supplies the flows")
+        checksum = simai.get("workload_sha256")
+        if (
+            not isinstance(checksum, str)
+            or len(checksum) != 64
+            or set(checksum) - set("0123456789abcdef")
+        ):
+            fail("simai.workload_sha256", "hash", "expected a SHA-256 digest")
     return {
         "config_hash": digest,
         "input": copy.deepcopy(document),
