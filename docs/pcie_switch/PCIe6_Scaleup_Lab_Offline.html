@@ -112,7 +112,12 @@ main{margin-left:208px}.top{height:61px;background:#fff;border-bottom:1px solid 
   <section id="guide" class="page" hidden></section>
   <section id="compare" class="page" hidden><div class="hero"><div><p class="eyebrow">COMPARISON</p><h1>方案对比</h1><p class="sub">选择同一比较维度，查看输入与瓶颈如何变化。</p></div></div><div class="card"><div class="sectionhead"><h2 id="compare-title">理论结果横向对比</h2></div><div class="viewtabs" id="compare-tabs"><button data-mode="model">模型</button><button data-mode="scenario">场景</button><button data-mode="cluster">PCIe 集群方案</button><button data-mode="native">厂商组网</button></div><div id="comparison" class="scroll"></div></div></section>
   <section id="templates" class="page" hidden><div class="hero"><div><p class="eyebrow">TOPOLOGY LIBRARY</p><h1>拓扑模板</h1><p class="sub">查看厂商原始互联、端口配置和链路速率。</p></div><a class="btn" id="report-link" target="_blank" rel="noopener">查看来源报告 ↗</a></div><div class="topology-toolbar"><div class="viewtabs" id="template-tabs"><button data-library="native">厂商组网</button><button data-library="pcie">PCIe 服务器 / 架构</button></div><div class="template-filters" id="template-filters"><label class="field">规模<select id="cluster-size"><option value="all">全部规模</option><option value="8">8 卡</option><option value="16">16 卡</option><option value="72">72 卡</option><option value="1024">1024 卡</option></select></label><label class="field">厂商<select id="cluster-vendor"><option value="all">全部厂商</option><option>华为</option><option>阿里云</option><option>NVIDIA</option></select></label></div></div><div id="template-cards" class="templategrid"></div></section>
-  <section id="evidence" class="page" hidden><div class="hero"><div><p class="eyebrow">VALIDATION</p><h1>验证记录</h1><p class="sub">将 SimAI、Astra-sim 或实测结果绑定到参数快照。</p></div></div><div class="card"><div class="sectionhead"><div><h2>录入结果</h2><p id="binding">绑定当前参数与理论快照</p></div></div><form id="evidence-form" class="entryform"></form></div><div class="card stacked"><div class="sectionhead"><h2>证据对照</h2></div><div class="viewtabs" id="evidence-tabs"><button data-kind="all">全部</button><button data-kind="theory">理论推导</button><button data-kind="simulation">仿真</button><button data-kind="measured">实测</button></div><div id="evidence-list"></div></div></section>
+  <section id="evidence" class="page" hidden><div class="hero"><div><p class="eyebrow">VALIDATION</p><h1>验证记录</h1><p class="sub">查看 gem5 周期仿真记录，或将其他仿真与实测结果绑定到参数快照。</p></div></div><div class="card"><div class="sectionhead"><div><h2>录入结果</h2><p id="binding">绑定当前参数与理论快照</p></div></div><form id="evidence-form" class="entryform"></form>
+<div class="hw-sim-controls">
+  <button class="btn" id="cycle-evidence-import">导入 gem5 结果</button>
+  <input id="cycle-evidence-file" type="file" accept=".json,application/json" hidden>
+</div>
+<p id="cycle-evidence-status" class="explain" role="status"></p></div><div class="card stacked"><div class="sectionhead"><h2>证据对照</h2></div><div class="viewtabs" id="evidence-tabs"><button data-kind="all">全部</button><button data-kind="theory">理论推导</button><button data-kind="simulation">仿真</button><button data-kind="measured">实测</button></div><div id="cycle-evidence-history"></div><div id="evidence-list"></div></div></section>
   <section id="history" class="page" hidden><div class="hero"><div><p class="eyebrow">VERSIONS</p><h1>历史版本</h1><p class="sub">恢复历史输入，或比较两个快照的参数和指标。</p></div><button class="btn primary" id="history-save">＋ 保存当前版本</button></div><div class="card"><div class="sectionhead"><h2>版本差异</h2></div><div id="version-diff"></div></div><div class="card stacked"><div class="sectionhead"><h2>已保存的版本</h2></div><div id="version-list"></div></div></section>
 </main>
 <dialog id="save-dialog"><form id="version-form"><h2>保存当前版本</h2><label>版本名称<input name="title" required maxlength="100"></label><label>结论 / 备注<textarea name="note" rows="3"></textarea></label><div class="dialog-actions"><button class="btn" type="button" id="cancel-save">取消</button><button class="btn primary">保存版本</button></div></form></dialog>
@@ -997,6 +1002,8 @@ function markup(){
     <p class="explain">从 gem5 根目录运行
     <code>build/NULL/gem5.fast -d m5out configs/example/pcie/cycle.py
     pcie6-experiment.json</code>，再导入 <code>m5out/cycle-result.json</code>。</p>
+    <p class="explain">也可直接导入 TestLib 的 <code>result.json</code>。
+    记录保留文件内的配置快照，可在「验证记录 → 仿真」查看。</p>
     <div class="hw-sim-controls">
       <button class="btn" id="cycle-generate">从设计输入生成</button>
       <button class="btn primary" id="cycle-export">导出 gem5 配置</button>
@@ -1228,40 +1235,39 @@ function download(spec){
     setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
-function mount(page,getInputs=()=>hardwareDefaults){
+function mount(page,getInputs=()=>hardwareDefaults,evidence=null){
     const get=id=>page.querySelector('#'+id);
     const editor=get('cycle-config'), status=get('cycle-status');
-    const file=get('cycle-file'), history=get('cycle-history');
+    const history=get('cycle-history');
+    const evidenceGet=suffix=>evidence.querySelector('#cycle-evidence-'+suffix);
     const comparison=get('cycle-comparison');
     let reference=null;
     const notices=message=>{status.textContent=message};
-    let saved={draft:'',exports:[],results:[]};
+    let saved={draft:'',results:[]};
     try{
         const prior=JSON.parse(localStorage.getItem(historyKey));
-        if(typeof prior?.draft==='string'&&Array.isArray(prior.exports)&&
-           Array.isArray(prior.results)){
+        if(typeof prior?.draft==='string'&&Array.isArray(prior.results)){
             saved={
                 draft:prior.draft,
-                exports:prior.exports,
                 results:prior.results.map(parseResult),
             };
         }
     }catch{}
-    function persist(message){
+    function persist(message,notify=notices){
         saved.draft=editor.value;
         try{
             localStorage.setItem(historyKey,JSON.stringify(saved));
-            notices(message);
+            notify(message);
         }catch{
-            notices(message+' 浏览器存储不可用，本次记录保留至关闭页面。');
+            notify(message+' 浏览器存储不可用，本次记录保留至关闭页面。');
         }
     }
     function generate(){
         editor.value=JSON.stringify(defaultExperiment(getInputs()),null,2);
     }
-    function attempt(action){
+    function attempt(action,notify=notices){
         return async ()=>{
-            try{await action()}catch(error){notices(error.message)}
+            try{await action()}catch(error){notify(error.message)}
         };
     }
     const generateButton=get('cycle-generate');
@@ -1273,34 +1279,39 @@ function mount(page,getInputs=()=>hardwareDefaults){
     get('cycle-export').onclick=attempt(async ()=>{
         const spec=parseExperiment(JSON.parse(editor.value));
         const hash=await configHash(spec);
-        if(!saved.exports.includes(hash))saved.exports.push(hash);
         download(spec);
         persist('已导出配置 '+hash);
     });
-    get('cycle-import').onclick=()=>file.click();
-    file.onchange=async ()=>{
-        const selected=file.files[0];
-        file.value='';
-        if(!selected)return;
-        await attempt(async ()=>{
-            const result=parseResult(JSON.parse(await selected.text()));
-            const hash=await configHash(result.input);
-            if(hash!==result.config_hash){
-                throw new Error('结果配置哈希与文件内的输入快照不符。');
-            }
-            if(!saved.exports.includes(hash)){
-                const current=parseExperiment(JSON.parse(editor.value));
-                if(hash!==await configHash(current)){
-                    throw new Error('结果配置哈希与当前配置或已导出快照不符。');
+    function bindImport(button,file,notify){
+        button.onclick=()=>file.click();
+        file.onchange=async ()=>{
+            const selected=file.files[0];
+            file.value='';
+            if(!selected)return;
+            await attempt(async ()=>{
+                const result=parseResult(JSON.parse(await selected.text()));
+                const hash=await configHash(result.input);
+                if(hash!==result.config_hash){
+                    throw new Error('结果配置哈希与文件内的输入快照不符。');
                 }
-            }
-            saved.results.push(result);
-            renderHistory();
-            persist('已导入 gem5 结果 '+hash);
-        })();
-    };
+                saved.results.push(result);
+                renderHistory();
+                persist('已导入 gem5 结果并保存至验证记录 '+hash,notify);
+            },notify)();
+        };
+    }
+    bindImport(get('cycle-import'),get('cycle-file'),notices);
+    if(evidence){
+        const evidenceStatus=evidenceGet('status');
+        bindImport(evidenceGet('import'),evidenceGet('file'),
+            message=>{evidenceStatus.textContent=message});
+    }
     function renderHistory(){
-        history.innerHTML=historyMarkup(saved.results);
+        const records=historyMarkup(saved.results);
+        history.innerHTML=records;
+        if(evidence){
+            evidenceGet('history').innerHTML=saved.results.length?records:'';
+        }
         renderComparison();
     }
     function renderComparison(){
@@ -1378,15 +1389,19 @@ function historyMarkup(results){
     return results.slice().reverse().map(result=>{
         const {
             warmup_ps,window_ps,timeout_ps,completed_flows,unfinished_flows,
+            samples,p50_ps,p99_ps,p999_ps,
         }=result.measurement;
         const progress=' · 完成 '+completed_flows+' / 未结束 '+unfinished_flows;
+        const latency=[p50_ps,p99_ps,p999_ps].map(
+            value=>value===null?'—':value+' ps').join(' / ');
         const snapshot=escape(JSON.stringify(result,null,2));
         return `<article class="record">
-          <div class="recordhead"><strong>${escape(result.mode)}</strong>
+          <div class="recordhead"><strong>gem5 · ${escape(result.mode)}</strong>
           <span class="pill">${escape(result.status)}</span></div>
           <p>配置哈希 ${escape(result.config_hash)}</p>
           <p>预热 ${warmup_ps} ps · 窗口 ${window_ps} ps ·
           超时 ${timeout_ps} ps · 流数 ${result.flows.length}${progress}</p>
+          <p>${samples} 个样本 · P50 / P99 / P999 · ${latency}</p>
           <details><summary>输入快照、拓扑、流与计数</summary>
           <p>${snapshot}</p></details>
           </article>`;
@@ -1632,7 +1647,7 @@ function runBench(){
   });
 }
 
-function mountHardware(page){
+function mountHardware(page,evidence){
   page.innerHTML=markup();
   const get=id=>page.querySelector('#'+id);
   const form=get('hw-form');
@@ -1642,7 +1657,7 @@ function mountHardware(page){
     const prior=JSON.parse(localStorage.getItem(storageKey));
     for(const key of Object.keys(hardwareDefaults))if(prior&&typeof prior[key]===typeof c[key])c[key]=prior[key];
   }catch{}
-  const updateCycleReference=modules['cycle-exchange.mjs'].mount(page,()=>c);
+  const updateCycleReference=modules['cycle-exchange.mjs'].mount(page,()=>c,evidence);
   const controls=[...form.elements];
   function sync(){
     for(const e of controls)e.value=c[e.name]??'';
@@ -2718,6 +2733,7 @@ const metricName=(record,key)=>record.metricBasis==='step-window'?metricLabels[k
 function snapshot(r){return {...r.metrics}}
 function renderEvidence(){
   setTabs('evidence-tabs','kind',evidenceKind);
+  $('cycle-evidence-history').hidden=evidenceKind!=='all'&&evidenceKind!=='simulation';
   const c=config(),r=calculate(c);
   $('binding').textContent='当前绑定 · '+modelName(c)+' / '+scenarioLabels[c.scenario]+' / '+templateName(c);
   const current=evidenceKind==='all'||evidenceKind==='theory'?'<article class="record"><div class="recordhead"><span class="pill theory">理论推导</span><strong>当前输入快照</strong></div><p>'+esc(modelName(c)+' · '+scenarioLabels[c.scenario]+' · '+templateName(c))+'</p><p>'+(r.errors?esc(r.errors.join(' ')):'热点需求 '+num(r.metrics.need)+' GB/s · 利用率 '+num(r.metrics.util)+'% · P99 '+metricText(r.metrics,'p99')+' µs · '+esc(r.verdict))+'</p></article>':'';
@@ -2727,7 +2743,7 @@ function renderEvidence(){
     return '<article class="record"><div class="recordhead"><span class="pill '+e.kind+'">'+kindNames[e.kind]+' · '+esc(e.method)+'</span><strong>'+esc(e.title)+'</strong><time>'+stamp(e.at)+'</time></div><p>'+esc(modelName(e.config)+' · '+scenarioLabels[e.config.scenario]+' · '+templateName(e.config))+'</p><p><strong>'+esc(metricName(e,e.metric))+' '+num(e.value)+'</strong> · 录入时理论值 '+metricText(e.metrics,e.metric)+delta+'</p>'+
       (e.environment?'<p>环境 '+esc(e.environment)+'</p>':'')+'<p>来源 '+(safeLink(e.source)?link(e.source,e.source):esc(e.source))+'</p>'+(e.note?'<p>'+esc(e.note)+'</p>':'')+
       '<button class="linkbtn" data-evidence-load="'+e.id+'">载入参数快照</button></article>';
-  }).join(''):'<p class="empty">此筛选下暂无已录入的验证结果。</p>');
+  }).join(''):'<p class="empty">此筛选下暂无手工录入的验证结果。</p>');
 }
 const fieldLabels=Object.fromEntries(fields.flatMap(([, , list])=>list.map(([key,label])=>[key,label])));
 function renderHistory(){
@@ -2896,7 +2912,7 @@ $('file').onchange=async e=>{
     persist();syncFields();render();toast('已载入备份参数并合并历史与验证记录。');
   }catch(err){toast('导入失败。'+err.message)}
 };
-mountHardware($('hardware'));
+mountHardware($('hardware'),$('evidence'));
 openPage(location.hash.slice(1));
 if(storageError)toast('无法读取浏览器保存的工作区，已打开默认参数。');
 

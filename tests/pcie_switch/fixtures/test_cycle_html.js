@@ -87,10 +87,20 @@ function createPage(storage = new Map(), mountHardware = false)
             return elements.get(selector);
         },
     };
+    const evidence = {
+        querySelector(selector) { return elements.get(selector); },
+    };
+    for (const id of ["cycle-evidence-import", "cycle-evidence-file",
+                      "cycle-evidence-status", "cycle-evidence-history"]) {
+        assert.ok(html.includes('id="' + id + '"'));
+        elements.set("#" + id, {click() { this.clicked = true; }});
+    }
     context.page = page;
+    context.evidence = evidence;
     const updateReference = vm.runInContext(
-        mountHardware ? "modules['hardware-page.mjs'].mountHardware(page)"
-                      : "modules['cycle-exchange.mjs'].mount(page)",
+        mountHardware
+            ? "modules['hardware-page.mjs'].mountHardware(page, evidence)"
+            : "modules['cycle-exchange.mjs'].mount(page, undefined, evidence)",
         context);
     const hash =
         vm.runInContext("modules['cycle-exchange.mjs'].configHash", context);
@@ -111,6 +121,35 @@ function createPage(storage = new Map(), mountHardware = false)
 async function main()
 {
     const page = createPage();
+    if (process.argv[2] === "--external-result") {
+        const result = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+        const editor = page.get("cycle-config");
+        const original = editor.value;
+        assert.notEqual(await page.hash(JSON.parse(original)),
+                        result.config_hash);
+        editor.value = "{";
+        await page.importResult(result);
+        assert.match(page.get("cycle-status").textContent, /已导入/);
+        assert.equal(editor.value, "{");
+        const history = page.get("cycle-evidence-history").innerHTML;
+        assert.ok(history.includes(result.config_hash));
+        assert.match(history, /P50/);
+        const reopened = createPage(page.storage, true);
+        assert.equal(reopened.get("cycle-evidence-history").innerHTML,
+                     history);
+        await reopened.importResult({...result, config_hash : "0".repeat(64)},
+                                    "cycle-evidence");
+        assert.match(reopened.get("cycle-evidence-status").textContent,
+                     /哈希/);
+        assert.equal(reopened.get("cycle-evidence-history").innerHTML,
+                     history);
+        await reopened.importResult(result, "cycle-evidence");
+        assert.match(reopened.get("cycle-evidence-status").textContent,
+                     /已导入/);
+        assert.equal(reopened.get("cycle-history").innerHTML,
+                     reopened.get("cycle-evidence-history").innerHTML);
+        return;
+    }
     await page.get("cycle-export").onclick();
     assert.equal(page.downloads.length, 1);
     assert.equal(page.downloads[0][0], "pcie6-experiment.json");
@@ -179,8 +218,6 @@ async function main()
     const unknown = structuredClone(result);
     unknown.input.workload.flows[0].bytes = 128;
     unknown.config_hash = await page.hash(unknown.input);
-    await page.importResult(unknown);
-    assert.match(page.get("cycle-status").textContent, /哈希/);
     assert.match(page.get("cycle-history").innerHTML, /尚无/);
 
     const changed = JSON.stringify(unknown.input);

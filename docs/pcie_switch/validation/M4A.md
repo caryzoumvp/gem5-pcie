@@ -34,6 +34,11 @@ python3 util/pcie_lab/validate.py --skip-build --output-dir output/pcie-validati
 28 项性能判定。各结果保存原配置、规范化参数、源文件哈希和
 window/start/end/final 等计数，便于复查和在 M4B 重放。
 
+可在离线 HTML 的「硬件规格与仿真」或「验证记录」中选择
+「导入 gem5 结果」。支持 CLI 的 `cycle-result.json` 和
+TestLib 拓扑案例目录里的 `result.json`。页面校验文件内输入
+快照的哈希，并将结果存入浏览器的「验证记录 → 仿真」。
+
 独立端点和内存是合成模型，适用范围为单域透明树、VC0、所选
 对齐 Memory TLP、已初始化 Gen6 和 store-and-forward。配置中
 任意 graph、跨域和未覆盖的协议能力由输入校验诊断。页面

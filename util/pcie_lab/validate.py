@@ -212,6 +212,21 @@ def validate(output, jobs, skip_build):
         "--result",
         cycle_output / "cycle-result.json",
     )
+    external_results = list(
+        results.parent.glob("SuiteUID-pcie-cycle-branch-*/*/result.json")
+    )
+    if len(external_results) != 1:
+        raise RuntimeError(
+            f"Expected one branch cycle result in {results.parent}"
+        )
+    run(
+        output,
+        "cycle-html-import-testlib",
+        "node",
+        browser,
+        "--external-result",
+        external_results[0],
+    )
 
     run(
         output,
