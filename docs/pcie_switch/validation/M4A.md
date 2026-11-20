@@ -25,7 +25,7 @@ M4A 在 NULL/fast 下使用 M3 已验收的 FLIT 周期数据面。输入是
 ## 复现入口
 
 ```sh
-python3 util/pcie_lab/validate.py --skip-build --output-dir /tmp/pcie-validation
+python3 util/pcie_lab/validate.py --skip-build --output-dir output/pcie-validation
 ```
 
 已有构建时执行上述命令。省略 `--skip-build` 可用同一入口构建
