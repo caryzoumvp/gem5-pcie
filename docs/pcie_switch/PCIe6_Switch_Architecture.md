@@ -190,15 +190,17 @@ DWC v5.71a为Gen5参考，不能证明Gen6 FLIT/FC行为。当前工作区未发
 
 ## 10. SimAI作为周期模型上层工作负载
 
-本节实现需求§12的SIM-01–SIM-16，M3周期门与M4闭环分别验收。
+本节涉及需求§12的SIM-01–SIM-16，M3 周期门、M4A 独立闭环、
+M4B SimAI 闭环分别验收。
 
 gem5周期级端口/bank/仲裁/Fabric/Link及Completion模型先通过M3验收，
-再由M4接入SimAI/SimCCL。上层只生成带依赖的flow，经同一DMA/TLP入口
+M4A 实现从配置构建拓扑、执行独立 workload 并回导 HTML；
+通过后由 M4B 接入 SimAI/SimCCL。上层生成带依赖的flow，经同一DMA/TLP入口
 驱动本架构；不得在SimAI另写固定时延Switch或复制一套credit/replay。
 
 AstraNetworkAPI适配、消息匹配、共同事件时间和callback合同见仿真架构
 §11。微基准与workload共用硬件资源路径，归约默认发生端点，PCIe-only
-不自动启用NVLS/INC。M4的因果闭环检查要求拥塞真实延迟后继任务，
+不自动启用NVLS/INC。M4B 的因果闭环检查要求拥塞真实延迟后继任务，
 不是把gem5吞吐标量导入SimAI就称完成集成。
 
 ## 11. Switch微架构详细设计

@@ -1,6 +1,6 @@
 # PCIe 6.0 Switch 仿真需求定义
 
-版本：v1.1（补齐性能目标与架构闭合口径）｜日期：2026-11-17｜状态：需求与验收计划，尚无实现结果。
+版本：v1.2（同步实现与性能证据）｜日期：2026-11-20｜状态：M0–M4A 已验收，M4B/M5 待交付。
 
 ## 1. 目标、来源与优先级
 
@@ -24,8 +24,8 @@ PCIe数据面驱动模型通信与计算依赖，输出闭环工作负载性能�
 不得作为`pcie6_timing`的协议规则。databook只补充实现选择，不能扩大
 首版范围或替换HTML中的配置项。未核实的竞品数值不参与验收。
 
-本次不修改HTML。其现有计算、缺陷和近似均需可追溯，协议修正导致的
-结果差异单列解释，不能悄悄改为另一套默认值。
+HTML的计算、缺陷和近似按版本与哈希追溯。协议修正导致的结果差异
+单列解释，参考默认值随源版本保存。
 
 ## 2. 使用场景与交付范围
 
@@ -39,10 +39,10 @@ PCIe数据面驱动模型通信与计算依赖，输出闭环工作负载性能�
 | B-06 | SimAI闭环工作负载（周期模型验收后必须交付） | SimAI/SimCCL调度/展开通信依赖，同一gem5 PCIe runtime负责硬件周期与完成反馈；要求见SIM-01–SIM-16 |
 | B-07 | 后续协议/产品扩展 | 多域/NTB、AI复制/INC、CXL等独立立项，不阻塞核心实验台交付 |
 
-首版先实现硬件页的配置兼容、解析sizing、synthetic及gem5周期模型，
-通过M3周期/所选协议验收后进入M4 SimAI闭环集成。UI/schema准备可提前，
-SimAI执行不能以M2的预算模型代替该入口门；这项顺序不要求先完成M5
-所有可选产品功能。需求分析页进一步复用该闭环后端。完整OS、PHY训练、RTL/VIP联动和专用IP
+通过 M3 周期及所选协议验收后，M4A 必须完成 HTML 配置导出、
+gem5 从配置构建实际拓扑并运行独立 workload、结果导回 HTML。
+M4B 在 M4A 验收后接入 SimAI/SimCCL，复用同一拓扑构建器与周期
+数据面；需求分析页进一步复用该闭环后端。完整OS、PHY训练、RTL/VIP联动和专用IP
 接口复现不是首版前置条件。详细协议模式仅宣称已测试的规范子集。
 
 ## 3. 协议约束与近似边界
@@ -133,16 +133,18 @@ DWC是Gen5单端口controller。以下保留F-23–F-32作为细化ID，除实�
 
 ### 4.4 SimAI集成的必需范围
 
-B-06/F-22是M4的必需交付，不再仅以“后续适配”描述。§12的SIM-01–SIM-16
+B-06/F-22 是 M4B 的必需交付，前置为 M4A 的独立运行与结果回导。
+§12的SIM-01–SIM-16
 给出可执行的功能、时序、生命周期与回归验收；不改变F-01–F-32或COMP
 编号。验证环境与expected先于每项实现，遵循原M0–M5计划的TDD要求。
 
 
 ## 5. 硬件页输入合同
 
-HTML内嵌`hardwareFields`是字段名、UI默认值、范围、步长和枚举的直接
-来源。后端不得删除或重命名这些字段。下表完整列出当前字段；实际运行
-须保存原始输入和解析后的有效值。`read/cascade/fixed`条件只控制显示，
+锁定参考HTML内嵌的`hardwareFields`是字段名、UI默认值、范围、步长
+和枚举的直接来源。后端不得删除或重命名这些字段。下表列出已锁定
+基线的字段；实际运行须保存原始输入和解析后的有效值。
+`read/cascade/fixed`条件只控制显示，
 不应把仍存在的隐藏字段误当成已启用行为。
 
 GB/s为十进制，KiB为1024B，ns/µs分别换算；频率为MHz。所有“0=自动”
@@ -323,8 +325,8 @@ COMP来源/条件不变。P-ID仍为P-01–P-13，不另换一套编号。
 
 所有目标报告`PASS/FAIL/UNSUPPORTED/NOT_COMPARABLE/NOT_RUN`及原因。
 配置合法、RTL接口存在或输出了P99，均不表示数值目标达成。
-各模型配置的运行证据见 [M3 验收记录](validation/M3.md)；
-P-11/12仍缺业务数值。
+当前 checker 以 `MISSING_CAPABILITY` 表示所需能力缺失，
+以 `INSUFFICIENT_SAMPLES` 单列样本不足。运行证据与未闭合项见 §6.7。
 
 ### 6.5 性能验收profile与独立分母
 
@@ -365,6 +367,29 @@ RTT也要先算残余：页面默认2×60ns switch预算+120ns endpoint+10ns
 往返传播已经是250ns，未留额外序列化/对齐/排队空间。即使两次switch
 各90ns，配合同样120ns端点和10ns传播已达310ns。P-04不能由P-02或
 P-13推出；端点与其他项不降到剩余预算内，就明确标为不满足挑战目标。
+
+### 6.7 当前性能实现与证据
+
+本节记录 gem5 合成端点的归档结果，验收线仍以 §6.4–6.5 为准。
+`configs/example/pcie/performance.py` 生成逐流有效吞吐/IOPS、
+逐方向 TLP/FLIT/停顿、core 服务及阶段 trace。`tail_latency.py`
+保存对应空载和加载 cohort。checker 分别给出数据正确性、性能和
+证据等级。§6.1–6.3 的统一资源、时延分位数和窗口输出仍有缺口。
+
+| 需求 | 已实现或实测的范围 | 当前状态 |
+|---|---|---|
+| P-01/02 | x16 模型方向串行化 256 B / 2 ns；九口 TX raw 算术总和 1152 GB/s；SW-LAT 64/256 B 读写同/跨 Slice 为 10/12 ns | raw 预算已复核；已测空载 core profile PASS |
+| P-03/04/13 | 合成 RTT-64 为 53 ns，当前数据路径为 S/F | RTT-XPU 不可比；pin 缺校准及同口径时间戳，C/T 缺实现 |
+| P-05 | 4 KiB Write 两种回程为 113.323 GB/s；Read 延迟/配对回程为 111.957/99.669 GB/s，参考 112.716 GB/s | Write 和延迟回程 Read 通过；配对回程 Read 未达 95% |
+| P-06 | 64 B Write 单流和 8→1 的聚合吞吐均为 64 GB/s；Read 为单流 48.000/45.995 GB/s，8→1 合计 48.000 GB/s | 已测 Write 通过；Read 未达标，8→1 两流窗口内无完成 |
+| P-07 | 九口 Write 576 GB/s，跨 Slice Read 288 GB/s；参考 576 GB/s | 已测 Write 通过；Read 未达标 |
+| P-08 | 九流非过订阅 64 B Write，70% 参考负载，两种回程的加载/空载 P99 均为 10/12 ns；每组 10,800 样本 | 已测 P99 通过；P999 样本不足，热点与读流量另测 |
+| P-09/10 | 广播、INC 及闭环 collective 的专项评估 | 待 M4/M5 对应路径和基线 |
+| P-11/12 | 已有资源计数与所选重放注错；面积/功耗/温度及 RAS SLA 未冻结 | 待产品目标和专项证据 |
+
+配对回程以独立 NOP FLIT 发送 ACK/NAK，FC Update 为协调事件。
+性能数字适用于记录的回程、packing、端点及 core 服务配置。
+逐项差距、目标分母与测量边界见 [性能审查](validation/performance_review.md)。
 
 ## 7. 硬件页校验与容量验收
 
@@ -426,8 +451,9 @@ profile后才报告闭环TTFT/TPOT/step时间。方案对比、验证记录、�
 3. T-03：复现参考事件口径与S-01–S-07；证明差异可解释。
 4. T-04：实现gem5有限资源timing及S-08，检查字节/Tag/信用/引用守恒。
 5. T-05：按条款完善FLIT/shared FC/replay和ordering测试；只声明实测覆盖。
-6. T-06：在gem5周期验收后接入SimAI/SimCCL闭环，再对接需求分析、对比
-   与结果导入；通过SIM-01–SIM-16，保留现有离线能力。
+6. T-06：周期验收后先完成 M4A 配置建图、独立 workload 与 HTML 回导。
+   通过后由 M4B 复用该 runtime 接入 SimAI/SimCCL、需求分析和闭环
+   对比；通过SIM-01–SIM-16，保留现有离线能力。
 7. T-07：需要时增加databook接口与配置/枚举细化；不倒置主次。
 8. T-08：物理Slice/bank/缓存等microarchitecture扫描，可校准但无预置PPA。
 9. T-09：多域、AI/CXL等扩展另立协议及验收合同。
@@ -448,7 +474,25 @@ Base Spec条款决定协议，HTML内嵌`hardware-sizing.mjs`、`hardware-sim.mj
 [gem5仿真架构](PCIe6_Simulation_Architecture.md)须遵循本文的来源顺序、
 模式和验收范围。竞品驱动规格纳入§11及附录A作为补充需求，以独立profile进入扫描和评估；
 不覆盖规范、HTML输入合同或首版验收范围。
-本文件没有宣称已实现、已运行bench或已通过PCIe6合规。
+
+### 10.1 当前代码与归档基线
+
+| 阶段 | gem5 代码与可执行证据 | 验收边界 |
+|---|---|---|
+| M0 | `util/pcie_lab` 的配置/schema、来源锁和 CLI | 锁定 63 字段、输入约束、模式/能力与来源检查 |
+| M1 | 参考 sizing、calibration JSON 及 `configs/example/pcie/reference.py` | S-01–S-07 与归档 HTML oracle 对照，保留参考统计口径 |
+| M2 | `src/dev/pci/pcie` 的 `PcieTiming` 与有限资源运行时 | 对齐 Memory 事务、Tag/Completion、Packet retry、单颗/级联、S-08 反压与排空 |
+| M3 | `PcieTiming` 的详细 FLIT 配置、Shared/Dedicated FC、Standard Replay；周期资源与性能入口 | 已初始化链路、VC0、所选 Memory TLP 和显式序号 Standard Replay。训练/动态 FC 初始化、完整 FC Update 编码/缩放、Selective Replay、PHY/pin 与 C/T 仍缺能力 |
+| M4A | 配置驱动拓扑、独立 gem5 workload、HTML 配置和结果回导 | V-20/26/36/37 已验收，作为 SimAI 接入的复用基线 |
+| M4B/M5 | SimAI/SimCCL 闭环及协议/产品扩展 | 待交付；范围见实施计划与 §12 |
+
+`gem5-pcie-validation-fprstupj/` 归档中，68 项 C++、38 项 Python
+和 54 项 TestLib 检查通过。26 个常规性能用例和 2 个尾延用例的
+数据正确性全部通过。数值目标为 21 项通过、6 项未达标（含三通道
+反例）、1 项不可比。该报告绑定归档时的 Base Spec/HTML 哈希。
+M4A 为新增的离线入口校验并更新参考 HTML 哈希，63 个字段和
+七组旧参考用例逐项一致。执行入口见 [一键验证](validation.md)，
+阶段证据见 [M3 验收](validation/M3.md) 和 [M4A 验收](validation/M4A.md)。
 
 ## 11. 竞品驱动的补充规格与目标
 
@@ -488,6 +532,8 @@ ARCH（架构自定门槛）、SIM（待仿真冻结）；不能把所有目标�
   含core阶段/仲裁/排队，不含外部PHY和端点。
 - `L_pin`：RX输入指定首bit至对应TX首bit；含PHY/PCS/FEC/FLIT/CDC，
   必须声明包型、gen/width、packing和负载。90ns对标先补齐其测点。
+  CT-PIN 的首/末 bit 口径须与 COMP-04 对齐后冻结；当前 checker
+  使用 `pin_first_to_last_bit` 候选口径，尚无 CT-PIN 验收结果。
 - `RTT_XPU`：XPU提交请求至数据/状态可消费；与link loop或core往返分开。
   两次switch穿越、链路、端点、序列化和queue预算互斥，不重复计时。
 - 每项附型号/stepping、固件、Host/端点、MPS/MRRS/RCB、class/VC、方向、
@@ -520,8 +566,10 @@ SimAI提案中的第二套PCIe事件核心。集成实现见本地仿真架构§
 
 ### 12.2 功能与验收矩阵
 
-所有SIM项均为集成阶段必需，不等于目前已实现。M3入口门与M4验收
-分别记录，未支持M5扩展不阻塞基础PCIe-only闭环。
+SIM-01 是 M3 周期入口门，SIM-02–SIM-16 是 M4B 闭环验收。
+M4A 先产出独立配置、实际拓扑与运行基线，M4B 的 V-30 用同配置
+和 trace 对照适配路径。
+未支持的 M5 扩展不阻塞基础 PCIe-only 闭环。
 
 | ID | 必须满足的仿真要求 | 验收场景 / 阶段 |
 |---|---|---|
@@ -561,7 +609,8 @@ case无FAIL/skip/xfail、required bins全命中、数据/身份/资源错误为0
 
 ### 12.4 交付状态与规模边界
 
-当前所有SIM项均未实现/未验收，文档更新不表示backend可用。交付包括
+SIM-01 的归档 gem5 周期 profile 已通过 V-35 和 M3 所选协议验收。
+SIM-02–SIM-16 的集成仍待交付。交付包括
 两仓库版本化API/FlowIR/结果合同、可执行TDD场景、gem5 runtime facade、
 SimAI PcieNetwork/构建入口、collective/workload fixtures及回归报告。
 

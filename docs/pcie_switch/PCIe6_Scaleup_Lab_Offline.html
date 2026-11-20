@@ -530,6 +530,526 @@ function simulateHardware(c,s=sizeHardware(c)){
 
 return { simulateHardware };
 })();
+modules['cycle-exchange.mjs'] = (() => {
+const experimentFormat='pcie6-cycle-experiment-v1';
+const resultFormat='pcie6-cycle-result-v1';
+const units={time:'ps',payload:'B'};
+const historyKey='pcie6-cycle-history-v1';
+const assessmentKey='pcie6-comp-history-v1';
+const {hardwareDefaults,sizeHardware} = modules['hardware-sizing.mjs'];
+
+function markup(){
+    return `<section class="card" aria-labelledby="cycle-title">
+    <div class="sectionhead"><div><h2 id="cycle-title">gem5 周期仿真</h2>
+    <p>配置透明树、独立流与测量窗口，离线交换 JSON 文件。</p></div></div>
+    <div class="entryform">
+      <label class="field wide">ExperimentSpec JSON
+      <textarea id="cycle-config" rows="12" spellcheck="false"
+      aria-describedby="cycle-config-note"></textarea>
+      </label>
+    </div>
+    <p class="explain" id="cycle-config-note">生成配置使用设计输入中的
+    事务、拓扑规模和链路参数，采用 RCB 128 B 与每发起端一条流。
+    在 JSON 中编辑流的依赖、地址窗口、链路或周期模型资源。
+    原始计算器输入随文件归档。</p>
+    <p class="explain">从 gem5 根目录运行
+    <code>build/NULL/gem5.fast -d m5out configs/example/pcie/cycle.py
+    pcie6-experiment.json</code>，再导入 <code>m5out/cycle-result.json</code>。</p>
+    <div class="hw-sim-controls">
+      <button class="btn" id="cycle-generate">从设计输入生成</button>
+      <button class="btn primary" id="cycle-export">导出 gem5 配置</button>
+      <button class="btn" id="cycle-import">导入 gem5 结果</button>
+      <input id="cycle-file" type="file" accept=".json,application/json" hidden>
+    </div>
+    <p id="cycle-status" class="explain" role="status"></p>
+    <div class="sectionhead"><h2>参考与周期仿真对照</h2></div>
+    <div id="cycle-comparison"></div>
+    <div class="sectionhead"><h2>gem5 结果历史</h2></div>
+    <div id="cycle-history"></div>
+    </section>
+    <section class="card" aria-labelledby="comp-title">
+    <div class="sectionhead"><div><h2 id="comp-title">COMP 目标评估</h2>
+    <p>查看 gem5 原生性能评估的目标判定、正确性和证据。</p></div></div>
+    <div class="hw-sim-controls">
+      <button class="btn" id="comp-import">导入 performance.json</button>
+      <input id="comp-file" type="file" accept=".json,application/json" hidden>
+    </div>
+    <p id="comp-status" class="explain" role="status"></p>
+    <div id="comp-history"></div>
+    </section>`;
+}
+
+function defaultExperiment(c){
+    const sizing=sizeHardware(c);
+    if(sizing.errors)throw new Error(sizing.errors.join(' '));
+    const nodes=[], links=[], flows=[];
+    const ports=new Map();
+    function node(data){
+        nodes.push(data);
+        ports.set(data.id,0);
+        return data.id;
+    }
+    function attach(a,b,lanes,meters){
+        const direction={
+            width:c.rate*lanes/8,
+            cycle_ps:1000,
+            propagation_ps:Math.round(
+                (meters*c.nsMeter+c.retimers*c.retimerNs)*1000),
+            credit_delay_ps:Math.round(c.creditFixed*1000),
+        };
+        const port=id=>{
+            const port=ports.get(id);
+            ports.set(id,port+1);
+            return {node:id,port};
+        };
+        links.push({
+            id:'link'+links.length,a:port(a),b:port(b),lanes,
+            forward:direction,reverse:{...direction},
+        });
+    }
+    let nextBase=0;
+    function leaf(id,kind,index,size){
+        const base=nextBase;
+        nextBase+=size;
+        node({id,kind,requester_id:index,base,size});
+        return {id,base};
+    }
+    const switches=Array.from({length:c.switches},(_,i)=>{
+        const sw={
+            id:'sw'+i,kind:'switch',port_budget:c.chipPorts,
+            lane_budget:c.chipLanes,
+        };
+        if(c.mps===4096)sw.resources={voq_cells:65,staging_cells:65};
+        return node(sw);
+    });
+    for(let i=1;i<switches.length;i++){
+        attach(switches[i-1],switches[i],c.islLanes,c.islMeters);
+    }
+    const srcs=Array.from({length:c.reqPorts},(_,i)=>{
+        const root=i===0;
+        const {id}=leaf(root?'root':'src'+i,root?'root':'endpoint',i,4096);
+        attach(id,switches[0],c.reqLanes,c.reqMeters);
+        return id;
+    });
+    const stride=Math.ceil((c.offset+c.payload)/4096)*4096;
+    const dsts=Array.from({length:c.cplPorts},(_,i)=>{
+        const slots=Math.max(1,Math.ceil((c.reqPorts-i)/c.cplPorts));
+        const dst=leaf('dst'+i,'endpoint',c.reqPorts+i,stride*slots);
+        attach(switches[switches.length-1],dst.id,c.cplLanes,c.cplMeters);
+        return dst;
+    });
+    for(const sw of nodes.filter(n=>n.kind==='switch')){
+        const attached=links.filter(l=>l.a.node===sw.id||l.b.node===sw.id);
+        const lanes=attached.reduce((sum,link)=>sum+link.lanes,0);
+        if(attached.length>sw.port_budget||lanes>sw.lane_budget){
+            throw new Error(sw.id+' 的端口数或 lane 用量超出配置预算。');
+        }
+    }
+    for(const [i,src] of srcs.entries()){
+        const dst=dsts[i%dsts.length];
+        flows.push({
+            id:'flow'+i,src,dst:dst.id,operation:c.op,
+            address:dst.base+Math.floor(i/dsts.length)*stride+c.offset,
+            bytes:c.payload,
+            release_ps:0,depends_on:[],pattern:0,
+        });
+    }
+    const window_ps=c.simUs*1000000;
+    return {
+        format:experimentFormat,units:{...units},
+        hardware:{
+            mps:c.mps,mrrs:c.mrrs,rcb:128,
+            core_cycle_ps:Math.round(1000000/c.clock),
+            max_transfer:Math.max(65536,c.payload),
+            data_credits:Math.max(32,c.mps/16),
+            flit_replay_timeout_ps:links.reduce((timeout,link)=>
+                Math.max(timeout,160000+4*link.forward.propagation_ps),160000),
+        },
+        topology:{kind:'transparent_tree',nodes,links},
+        workload:{flows},
+        measurement:{warmup_ps:0,window_ps,timeout_ps:window_ps},
+        lab_inputs:{...c},
+    };
+}
+
+function object(value){
+    return value!==null&&typeof value==='object'&&!Array.isArray(value);
+}
+
+function validString(value){
+    if(/[\uD800-\uDFFF]/u.test(value)){
+        throw new Error('JSON 字符串含无效 Unicode 字符。');
+    }
+    return value;
+}
+
+function canonical(value){
+    if(value===null)return ['null'];
+    if(typeof value==='boolean')return ['bool',value];
+    if(typeof value==='string')return ['string',validString(value)];
+    if(typeof value==='number'){
+        if(!Number.isFinite(value)||Math.abs(value)>Number.MAX_SAFE_INTEGER){
+            throw new Error('JSON 数值超出可精确交换的范围。');
+        }
+        const bytes=new DataView(new ArrayBuffer(8));
+        bytes.setFloat64(0,value===0?0:value);
+        const hex=bytes.getBigUint64(0).toString(16).padStart(16,'0');
+        return ['number',hex];
+    }
+    if(Array.isArray(value))return ['array',value.map(canonical)];
+    return ['object',Object.keys(value).sort().map(
+        key=>[validString(key),canonical(value[key])])];
+}
+
+async function configHash(spec){
+    const bytes=new TextEncoder().encode(JSON.stringify(canonical(spec)));
+    if(!globalThis.crypto?.subtle){
+        throw new Error('此浏览器环境不提供 SHA-256，请使用支持离线加密的浏览器。');
+    }
+    const digest=await crypto.subtle.digest('SHA-256',bytes);
+    return Array.from(new Uint8Array(digest),
+        byte=>byte.toString(16).padStart(2,'0')).join('');
+}
+
+function hasUnits(value){
+    return object(value)&&Object.keys(value).length===2&&
+        value.time===units.time&&value.payload===units.payload;
+}
+
+function parseExperiment(spec){
+    if(!object(spec)||spec.format!==experimentFormat){
+        throw new Error('ExperimentSpec 格式版本不受支持。');
+    }
+    if(!hasUnits(spec.units))throw new Error('配置单位必须为 ps 和 B。');
+    if(!object(spec.hardware)||!object(spec.topology)||
+       !Array.isArray(spec.topology.nodes)||
+       !Array.isArray(spec.topology.links)||
+       !Array.isArray(spec.workload?.flows)||!object(spec.measurement)){
+        throw new Error('配置缺少硬件、拓扑、流或测量窗口。');
+    }
+    return spec;
+}
+
+function parseResult(result){
+    if(!object(result)||result.format!==resultFormat){
+        throw new Error('ResultBundle 格式版本不受支持。');
+    }
+    if(!hasUnits(result.units))throw new Error('结果单位必须为 ps 和 B。');
+    if(result.mode!=='pcie6_timing'){
+        throw new Error('结果模式必须为 pcie6_timing。');
+    }
+    if(!['pass','fail','truncated'].includes(result.status)||
+       !Array.isArray(result.flows)||!object(result.measurement)||
+       !object(result.topology)||!object(result.counters)||
+       !object(result.producer)){
+        throw new Error('结果缺少运行状态、流、测量窗口、拓扑或计数。');
+    }
+    parseExperiment(result.input);
+    const requested=result.input.measurement;
+    for(const key of ['warmup_ps','window_ps','timeout_ps']){
+        if(!Number.isSafeInteger(requested[key])||requested[key]<0||
+           result.measurement[key]!==requested[key]){
+            throw new Error('结果测量窗口与配置不符。');
+        }
+    }
+    if(typeof result.measurement.window_complete!=='boolean'){
+        throw new Error('结果缺少测量窗口结束状态。');
+    }
+    for(const key of [
+        'completed_payload_bytes','completed_flows','unfinished_flows','samples',
+    ]){
+        const value=result.measurement[key];
+        if(!Number.isSafeInteger(value)||value<0){
+            throw new Error('结果计数无效：'+key);
+        }
+    }
+    for(const key of ['p50_ps','p99_ps','p999_ps']){
+        const value=result.measurement[key];
+        if(value!==null&&(!Number.isFinite(value)||value<0)){
+            throw new Error('结果延迟无效：'+key);
+        }
+    }
+    if(typeof result.config_hash!=='string'||
+       !/^[0-9a-f]{64}$/.test(result.config_hash)){
+        throw new Error('结果配置哈希格式无效。');
+    }
+    return result;
+}
+
+function download(spec){
+    const url=URL.createObjectURL(new Blob(
+        [JSON.stringify(spec,null,2)+'\n'],{type:'application/json'}));
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='pcie6-experiment.json';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function mount(page,getInputs=()=>hardwareDefaults){
+    const get=id=>page.querySelector('#'+id);
+    const editor=get('cycle-config'), status=get('cycle-status');
+    const file=get('cycle-file'), history=get('cycle-history');
+    const comparison=get('cycle-comparison');
+    let reference=null;
+    const notices=message=>{status.textContent=message};
+    let saved={draft:'',exports:[],results:[]};
+    try{
+        const prior=JSON.parse(localStorage.getItem(historyKey));
+        if(typeof prior?.draft==='string'&&Array.isArray(prior.exports)&&
+           Array.isArray(prior.results)){
+            saved={
+                draft:prior.draft,
+                exports:prior.exports,
+                results:prior.results.map(parseResult),
+            };
+        }
+    }catch{}
+    function persist(message){
+        saved.draft=editor.value;
+        try{
+            localStorage.setItem(historyKey,JSON.stringify(saved));
+            notices(message);
+        }catch{
+            notices(message+' 浏览器存储不可用，本次记录保留至关闭页面。');
+        }
+    }
+    function generate(){
+        editor.value=JSON.stringify(defaultExperiment(getInputs()),null,2);
+    }
+    function attempt(action){
+        return async ()=>{
+            try{await action()}catch(error){notices(error.message)}
+        };
+    }
+    const generateButton=get('cycle-generate');
+    generateButton.onclick=attempt(()=>{
+        generate();
+        persist('已从当前设计输入生成配置。');
+    });
+    editor.onchange=()=>persist('');
+    get('cycle-export').onclick=attempt(async ()=>{
+        const spec=parseExperiment(JSON.parse(editor.value));
+        const hash=await configHash(spec);
+        if(!saved.exports.includes(hash))saved.exports.push(hash);
+        download(spec);
+        persist('已导出配置 '+hash);
+    });
+    get('cycle-import').onclick=()=>file.click();
+    file.onchange=async ()=>{
+        const selected=file.files[0];
+        file.value='';
+        if(!selected)return;
+        await attempt(async ()=>{
+            const result=parseResult(JSON.parse(await selected.text()));
+            const hash=await configHash(result.input);
+            if(hash!==result.config_hash){
+                throw new Error('结果配置哈希与文件内的输入快照不符。');
+            }
+            if(!saved.exports.includes(hash)){
+                const current=parseExperiment(JSON.parse(editor.value));
+                if(hash!==await configHash(current)){
+                    throw new Error('结果配置哈希与当前配置或已导出快照不符。');
+                }
+            }
+            saved.results.push(result);
+            renderHistory();
+            persist('已导入 gem5 结果 '+hash);
+        })();
+    };
+    function renderHistory(){
+        history.innerHTML=historyMarkup(saved.results);
+        renderComparison();
+    }
+    function renderComparison(){
+        comparison.innerHTML=comparisonMarkup(reference,saved.results);
+    }
+    if(saved.draft)editor.value=saved.draft;
+    else{
+        try{generate()}catch(error){notices(error.message)}
+    }
+    renderHistory();
+    mountAssessments(get);
+    return result=>{
+        reference=result;
+        renderComparison();
+    };
+}
+
+const escape=value=>String(value??'').replace(/[&<>"']/g,
+    ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+function comparisonMarkup(reference,results){
+    const cycle=results.at(-1);
+    if(!reference&&!cycle){
+        return '<p class="empty">运行本页参考模型或导入 gem5 结果以查看指标。</p>';
+    }
+    const number=value=>Number.isFinite(value)?
+        value.toLocaleString('zh-CN',{maximumFractionDigits:3}):'—';
+    const quantity=(value,unit)=>Number.isFinite(value)
+        ? number(value)+' '+unit : '—';
+    const tails=(values,unit)=>values.map(value=>quantity(value,unit)).join(' / ');
+    const row=(mode,boundary,window,payload,rate,samples,tail)=>
+        '<tr>'+[mode,boundary,window,payload,rate,samples,tail].map(
+            value=>'<td>'+value+'</td>').join('')+'</tr>';
+    const rows=[];
+    if(reference){
+        const window=reference.actualDuration*.8;
+        rows.push(row('lab_reference','稳态 · 每发起端口',
+            number(window)+' ns',number(reference.stats.bytes)+' B（全端口）',
+            quantity(reference.bw,'GB/s'),number(reference.sampleCount),
+            tails([reference.p50,reference.p99,reference.p999],'ns')));
+    }
+    function cycleRow(result,label){
+        const {
+            window_ps:window,completed_payload_bytes:bytes,
+            window_complete:complete,p50_ps:p50,p99_ps:p99,p999_ps:p999,samples,
+        }=result.measurement;
+        const rate=complete&&window>0?bytes*1000/window:null;
+        const boundary=complete===false?'独立流 · 窗口未结束':'独立流 · 全端口';
+        return row(label+' · '+result.status,boundary,
+            quantity(window,'ps'),quantity(bytes,'B'),quantity(rate,'GB/s'),
+            number(samples),tails([p50,p99,p999],'ps'));
+    }
+    if(cycle){
+        rows.push(cycleRow(cycle,'pcie6_timing'));
+        const current=cycle.measurement;
+        if(current.window_complete){
+            const previous=results.slice(0,-1).reverse().find(result=>{
+                const m=result.measurement;
+                return result.config_hash===cycle.config_hash&&m.window_complete&&
+                    m.warmup_ps===current.warmup_ps&&m.window_ps===current.window_ps&&
+                    m.cohort===current.cohort;
+            });
+            if(previous)rows.push(cycleRow(previous,'同配置 · 上次导入'));
+        }
+    }
+    return '<p class="explain">每一行保留自身的 workload 与测量范围。</p>'+
+        '<div class="scroll"><table><thead><tr>'+
+        ['模式','测量范围','窗口','完成 Payload','吞吐','样本','P50 / P99 / P999'].map(
+            label=>'<th scope="col">'+label+'</th>').join('')+
+        '</tr></thead><tbody>'+rows.join('')+'</tbody></table></div>';
+}
+
+function historyMarkup(results){
+    if(!results.length)return '<p class="empty">尚无导入结果。</p>';
+    return results.slice().reverse().map(result=>{
+        const {
+            warmup_ps,window_ps,timeout_ps,completed_flows,unfinished_flows,
+        }=result.measurement;
+        const progress=' · 完成 '+completed_flows+' / 未结束 '+unfinished_flows;
+        const snapshot=escape(JSON.stringify(result,null,2));
+        return `<article class="record">
+          <div class="recordhead"><strong>${escape(result.mode)}</strong>
+          <span class="pill">${escape(result.status)}</span></div>
+          <p>配置哈希 ${escape(result.config_hash)}</p>
+          <p>预热 ${warmup_ps} ps · 窗口 ${window_ps} ps ·
+          超时 ${timeout_ps} ps · 流数 ${result.flows.length}${progress}</p>
+          <details><summary>输入快照、拓扑、流与计数</summary>
+          <p>${snapshot}</p></details>
+          </article>`;
+    }).join('');
+}
+
+const targetProfiles={
+    'P-02':'SW-LAT','P-04':'RTT-64','P-05':'SW-BULK','P-06':'SW-SMALL',
+    'P-07':'SW-PERM','P-08':'SW-TAIL','P-13':'CT-PIN',
+};
+
+function parseAssessment(record){
+    if(!object(record)||!object(record.profile)||!object(record.evaluation)||
+       !(record.measurement===null||object(record.measurement))){
+        throw new Error('performance.json 格式无效。');
+    }
+    const {profile,evaluation,measurement}=record;
+    if(evaluation.schema_version!==1){
+        throw new Error('COMP 评估格式版本不受支持。');
+    }
+    if(typeof evaluation.target_id!=='string'||
+       !Object.hasOwn(targetProfiles,evaluation.target_id)||
+       typeof profile.name!=='string'||typeof profile.frozen!=='boolean'){
+        throw new Error('COMP 目标或 profile 类型无效。');
+    }
+    const hashes=profile.source_hashes;
+    if(!object(hashes)||!Object.keys(hashes).length||
+       Object.values(hashes).some(hash=>
+           typeof hash!=='string'||!/^[0-9a-f]{64}$/.test(hash))){
+        throw new Error('COMP 来源 SHA-256 快照无效。');
+    }
+    const {target_status,correctness_status,evidence_level,reason,metrics}=
+        evaluation;
+    const statuses=['PASS','FAIL','NOT_RUN','NOT_COMPARABLE',
+        'MISSING_CAPABILITY','INSUFFICIENT_SAMPLES'];
+    if(!statuses.includes(target_status)||
+       !['PASS','FAIL','NOT_RUN'].includes(correctness_status)||
+       !(evidence_level===null||typeof evidence_level==='string')||
+       typeof reason!=='string'||!object(metrics)){
+        throw new Error('COMP 目标状态、正确性或证据字段无效。');
+    }
+    if(target_status==='PASS'&&(
+        correctness_status!=='PASS'||evidence_level!=='gem5_flit_cycle'||
+        profile.name!==targetProfiles[evaluation.target_id]||!profile.frozen||
+        !measurement||!Object.keys(measurement).length||!Object.keys(metrics).length
+    )){
+        throw new Error('COMP PASS 缺少对应的 profile、正确性或测量证据。');
+    }
+    return record;
+}
+
+function mountAssessments(get){
+    const file=get('comp-file'),status=get('comp-status'),history=get('comp-history');
+    let assessments=[];
+    try{
+        const stored=JSON.parse(localStorage.getItem(assessmentKey));
+        if(Array.isArray(stored))assessments=stored.map(parseAssessment);
+    }catch{}
+    function render(){
+        history.innerHTML=assessments.length
+            ? assessments.slice().reverse().map(assessmentMarkup).join('')
+            : '<p class="empty">尚无 COMP 评估。</p>';
+    }
+    get('comp-import').onclick=()=>file.click();
+    file.onchange=async ()=>{
+        const selected=file.files[0];
+        file.value='';
+        if(!selected)return;
+        try{
+            const record=parseAssessment(JSON.parse(await selected.text()));
+            assessments.push(record);
+            render();
+            status.textContent='已导入 COMP 评估。';
+            try{
+                localStorage.setItem(assessmentKey,JSON.stringify(assessments));
+            }catch{
+                status.textContent+=' 浏览器存储不可用，本次记录保留至关闭页面。';
+            }
+        }catch(error){
+            status.textContent=error.message;
+        }
+    };
+    render();
+}
+
+function assessmentMarkup({profile,evaluation,measurement}){
+    const {
+        target_id,target_status,correctness_status,evidence_level,reason,metrics,
+    }=evaluation;
+    const snapshot=escape(JSON.stringify({profile,measurement,evaluation},null,2));
+    return `<article class="record">
+      <div class="recordhead"><strong>${escape(target_id)} ·
+      ${escape(profile.name)}</strong>
+      <span class="pill">文件目标判定 ${escape(target_status)}</span></div>
+      <p>正确性 ${escape(correctness_status)} ·
+      证据 ${escape(evidence_level??'—')}</p>
+      <p>${escape(reason)}</p>
+      <p>${escape(JSON.stringify(metrics))}</p>
+      <details><summary>测量口径、profile 与来源快照</summary>
+      <p>${snapshot}</p></details>
+      </article>`;
+}
+
+return {markup,mount,configHash};
+})();
 modules['hardware-page.mjs'] = (() => {
 const {hardwareDefaults,hardwareFields,hardwarePresets,sizeHardware,tagCeiling} = modules['hardware-sizing.mjs'];
 
@@ -562,6 +1082,7 @@ function markup(){
     card('端口与数据面规格','SerDes lane、IP 物理通道、Slice 分开计量','hw-spec')+
     card('Credit、Replay 与缓存','每物理链路单向 · P / NP / Cpl 分账','hw-memory')+
     '<section class="card"><div class="sectionhead"><div><h2>离散事件仿真</h2><p>运行当前配置，核对吞吐、Tag 停顿与队列峰值</p></div></div><div class="hw-sim-controls"><button class="btn primary" id="hw-run">运行当前配置</button><button class="btn" id="hw-bench">运行校验用例</button><button class="btn" id="hw-export">导出校准 JSON</button></div><div id="hw-sim" role="status" aria-live="polite"><p class="empty">选择运行后显示本页事件模型的结果。</p></div><p class="explain">事件模型按 TLP 串行化、路径传播、Tag、Credit 窗口、端口和 Fabric 服务率计算。Replay 按窗口限速，VOQ 峰值与容量比较。模型采用 Store-and-forward、FIFO Fabric 服务和理想 Credit 回收。逐跳序列化额外计入，所以仿真空载延迟可能高于输入 RTT 预算。Gen6 FLIT 细节、重放错误注入、Cut-through、Credit 级联反压、ordering 与死锁需在 RTL / BFM 层验证。</p></section>'+
+    modules['cycle-exchange.mjs'].markup()+
     '<section class="card formulas"><div class="sectionhead"><h2>公式、验证范围与来源</h2></div><div class="hw-formulas">'+
       '<details open><summary>请求、Completion 与 Tag</summary><p>每笔应用传输先按 MRRS 或 MPS 以及 4 KiB 边界拆分。CplD 受 MPS 限制，内部切点与 RCB 对齐。选择每 RCB 分段可评估较高的 Completion 率。N = ⌈目标 GB/s × 每应用传输 MemRd 数 × RTT(ns) ÷ 应用传输 B⌉。Tag 在该 MemRd 最后一个 Completion 后释放。'+href(rcb,'AMD RCB 说明')+' · '+href(tags,'FLIT Mode Tag')+'</p></details>'+
       '<details><summary>FLIT packing、链路上限与延迟</summary><p>FLIT Mode raw = GT/s × lanes ÷ 8。TLP 容量 = raw × 236/256 × 填充率。请求和响应分别限速，切割按发起/响应端口比和级联链路计。头部字段是可调字节假设。事务 RTT 预算含往返传播、Retimer、Switch 和端点余量。Credit / ACK 各按单条链路计算闭环。'+href(flit,'PCI-SIG FLIT 结构')+'</p></details>'+
@@ -679,6 +1200,7 @@ function mountHardware(page){
     const prior=JSON.parse(localStorage.getItem(storageKey));
     for(const key of Object.keys(hardwareDefaults))if(prior&&typeof prior[key]===typeof c[key])c[key]=prior[key];
   }catch{}
+  const updateCycleReference=modules['cycle-exchange.mjs'].mount(page,()=>c);
   const controls=[...form.elements];
   function sync(){
     for(const e of controls)e.value=c[e.name]??'';
@@ -689,6 +1211,7 @@ function mountHardware(page){
   }
   function render(){
     simulation=null;r=sizeHardware(c);
+    updateCycleReference(null);
     const kpi=(label,value,detail)=>'<div class="kpi"><div class="label">'+label+'</div><strong>'+value+'</strong><div class="detail">'+detail+'</div></div>';
     get('hw-sim').innerHTML='<p class="empty">选择运行后显示当前参数的事件模型结果。</p>';
     for(const id of ['hw-run','hw-export'])get(id).disabled=!!r.errors;
@@ -738,7 +1261,11 @@ function mountHardware(page){
       finally{buttons[0].disabled=!!r.errors;buttons[1].disabled=false}
     },0));
   }
-  get('hw-run').onclick=()=>run('仿真运行中',()=>{simulation=simulateHardware(c,r);get('hw-sim').innerHTML=resultView(c,r,simulation)});
+  get('hw-run').onclick=()=>run('仿真运行中',()=>{
+    simulation=simulateHardware(c,r);
+    get('hw-sim').innerHTML=resultView(c,r,simulation);
+    updateCycleReference(simulation.errors?null:simulation);
+  });
   get('hw-bench').onclick=()=>run('校验运行中',()=>{
     get('hw-sim').innerHTML='<p class="explain">吞吐按 64 B / 4 KiB 协议上限核对，Tag / Credit 压力用例检查停顿与降速。</p>'+
       table(['校验用例','在途 MemRd','CplD / 应用传输','仿真 GB/s / 端口','P99','核对结果'],runBench());

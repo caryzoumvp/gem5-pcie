@@ -1,7 +1,7 @@
 # PCIe 6.0 Switch 仿真实施计划
 
-版本：v1.0｜日期：2026-11-18｜状态：M0–M2 已通过本地阶段验收。
-依据[需求v1.1](PCIe6_Switch_Requirements.md)、
+版本：v1.1｜日期：2026-11-20｜状态：M0–M4A 已通过本地阶段验收。
+依据[需求](PCIe6_Switch_Requirements.md)、
 [硬件架构](PCIe6_Switch_Architecture.md)与
 [仿真架构](PCIe6_Simulation_Architecture.md)。本文件是阶段依赖、任务与
 完成证据的唯一计划；不承诺未经估算的日历工期或已运行结果。
@@ -23,17 +23,18 @@ flowchart LR
   M0[M0 规范与输入合同] --> M1[M1 参考模型与JSON]
   M1 --> M2[M2 gem5有限资源]
   M2 --> M3[M3 Gen6协议细化]
-  M3 --> M4[M4 页面 / SimAI闭环workload]
+  M3 --> M4A[M4A 配置驱动 gem5 / 独立 workload / HTML]
+  M4A --> M4B[M4B SimAI / SimCCL 闭环]
   M3 --> G[详细协议与目标评估]
-  M4 --> G
+  M4B --> G
   M2 --> M5[M5 可选controller与扩展]
 ```
 
-首个可用交付为M0–M2：63字段输入、sizing、参考bench、有限资源单颗/
-级联、完整结果与CLI。它仍可能是TLP服务预算子集，不能声称详细FLIT。
-M3/M4是完整目标的重要后续工作；M5按明确范围单独验收，不因后置而
-删除需求。M4的UI/格式准备可提前，但SimAI执行依赖M3周期验收门；不改变M0–M3
-先完成Switch模型的主线。
+M0–M2 已提供 63 字段输入、参考 sizing/CLI/bench、单颗/级联
+有限资源 fixture 与结果；M3 进一步交付详细 FLIT 子集。
+M4 先交付可独立运行的 gem5/HTML 闭环（M4A），再接入 SimAI
+（M4B）。M4B 实现和联调以 M4A 验收为前置，M4A 继承 M3
+验收的周期数据面。M5 各扩展按各自合同验收。
 
 | 阶段 | 当前状态 | 退出门 | 需求映射 |
 |---|---|---|---|
@@ -41,7 +42,8 @@ M3/M4是完整目标的重要后续工作；M5按明确范围单独验收，不�
 | M1 | 已验收 | sizing与JSON对照、S-01–S-07参考回归 | F-02/07/19/20/21，T-02/03 |
 | M2 | 已验收 | 有限单颗/级联、数据/资源守恒、S-08排空 | F-03/06/17/22，A-01至A-04/07，T-04 |
 | M3 | 完成 | 所选Gen6条款和周期门通过；固定profile的性能目标按用例分别判定 | F-01/02/06/19，T-05 |
-| M4 | 未开始 | 已验收gem5周期模型接入SimAI、collective/DAG闭环与结果导入 | B-01/05/06，F-09/20/21/22，T-06 |
+| M4A | 已验收 | HTML 配置驱动 gem5 实际建拓扑并独立运行 workload，结果可导回 HTML，与旧格式兼容 | B-02/03/04/05，F-03/04/09/19/20/21，T-06 前置 |
+| M4B | 待实现 | 同一 gem5 构建器和 runtime 接入 SimAI，完成 collective/DAG 闭环与旧 backend 回归 | B-01/06，F-22，SIM-02–16，T-06 |
 | M5 | 未开始 | 按extension逐项满足入口与测试合同 | F-05/10至F-16/18/23至F-32，T-07至T-10 |
 
 ## 2. M0：规范、schema与能力合同
@@ -165,7 +167,7 @@ M2无错TLP预算下的ACK/replay空间若采用近似须标记；不得提前�
 | M3-03 | ACK/NAK/timeout/replay与注错 | 副本容量、DLP更新、重发服务、重复抑制、恢复/排空与资源守恒 |
 | M3-04 | ordering/Completion规则覆盖 | 合法/非法越过、分段/错误Completion、能力不匹配的条款测试 |
 | M3-05 | 参数敏感性/competitor_target评估 | 吞吐/短包/置换/尾延与测点明确，目标结果有输入与误差边界 |
-| M3-06 | 周期级profile和资源服务验收 | V-35：端口TLP/cycle、bank/RAM读写、仲裁/Fabric/staging、时钟/CDC和释放边沿有独立周期trace；通过后才启动SimAI闭环 |
+| M3-06 | 周期级profile和资源服务验收 | V-35：端口TLP/cycle、bank/RAM读写、仲裁/Fabric/staging、时钟/CDC和释放边沿有独立周期trace；通过后进入 M4A |
 
 M3-01–04 覆盖所选 Memory TLP、FLIT packing 和 CRC、已初始化
 的 Shared/Dedicated FC、Standard Replay 及 Completion/ordering
@@ -184,35 +186,79 @@ SW-SMALL、SW-PERM 和 SW-TAIL；部分 Read 吞吐目标未达标，
 C/T在定义安全转发与错误提交条件后单独实现/验收，再评估COMP-04。
 不能把90ns或250ns填成固定阶段时延后称为目标闭合。
 
-## 6. M4：HTML、需求分析与workload联动
+## 6. M4：独立 gem5 闭环，然后接入 SimAI
 
-前置：M1格式合同、M2有限资源和M3周期模型验收。M4-01/02等UI/格式
-准备可先做；M4-06–M4-11的SimAI闭环执行须等M3-06及所选协议覆盖
-通过后启动，不把预算模型接口联通写成周期级集成已完成。
+### 6.1 M4A：HTML 配置、gem5 建拓扑与独立 workload、结果回导
 
-接口依据SimAI侧`/workspaces/SimAI/docs/pcie_switch/PCIe6_Simulation_Architecture.md`
-及当前AstraNetworkAPI/SimCCL源码；本地仿真架构§11定义适配合同。
+前置：M1 格式合同、M2 有限资源、M3 周期和所选协议验收。
+M4A 的 `compile_cycle` 与 `configs/example/pcie/cycle.py` 将
+配置中拓扑及链路/端口资源应用到实际运行的 gem5 对象。
+
+HTML 保持离线，用户导出带版本的 `ExperimentSpec`，包括硬件
+profile、拓扑及端点放置、测量窗口和独立 workload。gem5 CLI
+校验并规范化为 `TopologyIR` / `WorkloadIR`，由构建器创建
+Requester/Completer、Switch 及双向 Link；用同一事件队列执行，
+排空后生成 `ResultBundle`。用户将结果导回 HTML，与绑定原快照
+的参考结果或另一模型结果比较。
+
+```mermaid
+flowchart LR
+  H[HTML 配置] --> S[ExperimentSpec 文件]
+  S --> C[gem5 配置编译]
+  C --> T[构建实际拓扑和路由]
+  C --> W[编译独立 workload]
+  T --> R[gem5 周期运行和排空]
+  W --> R
+  R --> B[ResultBundle 文件]
+  B --> I[HTML 导入和对照]
+```
+
+交付的拓扑样例包括单交换机 star、有两颗 Switch 的级联和可验证的
+透明分支。编译器把节点、port/lane、链路双向参数、Requester ID、
+地址窗口和路由显式绑定；记录每个配置 ID 对应的实例和逐 flow 路径。
+对 split/direct 和通用 graph 输入按能力检查；只有可映射到已支持
+物理转发合同的配置可运行。未知路径、环、超预算、窗口冲突和未支持
+的跨域配置在启动流量前诊断。
+
+| 任务 | 产物（计划） | 独立验收 |
+|---|---|---|
+| M4-03 | ExperimentSpec→TopologyIR / WorkloadIR / FlowIR 与 placement 编译 | node/port/link/地址及依赖合法性、单位、稳定 ID 和有效参数可审计；V-36/37 |
+| M4-12 | gem5 拓扑构建器、独立 CLI 和 runtime facade | 从配置创建并连接真实对象，输出生效拓扑；变更链宽/资源或级联数改变对应路径/计数；V-36 |
+| M4-04 | 独立 P2P、incast、显式 collective 流及小型通信 DAG | 配置给出 release、Read/Write、字节与依赖，实际完成推进后继，停发后有界排空；V-37 |
+| M4-01 | HTML 配置导出、ResultBundle 转换和硬件页结果导入 | schema/单位/hash 相符；旧 hardware-calibration 与 workspace 各走原入口，历史快照保留；V-20/26 |
+| M4-02 | 硬件页参考/周期结果展示 | 测点、指标、容量/峰值、瓶颈、样本、窗口及缺能力可见，零样本/截短显式；V-26 |
+| M4-05 | 对比/模板/证据/历史版本 | config/source hash 绑定；COMP 目标的独立 profile、原始结果与评估状态可追溯；V-26 |
+
+M4A 先完成配置编译、实际建图和最小 P2P 纵切，再接独立 workload
+与结果回导。出口门为 V-20/26/36/37 全通过。发布可重复运行的
+HTML 导出样例、CLI、ResultBundle 及其独立 expected，至少覆盖
+单颗/两颗、64 B/4 KiB Read/Write、8→1 以及一次因拥塞推迟后继的
+DAG。运行过程无需 SimAI 安装或启动；记录 M4B 可复用的拓扑 hash、
+硬件 profile、注入时刻、路径、payload/资源计数及完成 trace。
+已执行结果见 [M4A 验收](validation/M4A.md)。
+
+### 6.2 M4B：SimAI/SimCCL 集成
+
+前置：M4A 独立验收与可重放对照已完成。以其拓扑构建器、
+配置 IR、runtime facade、事件队列和 ResultBundle 为共享基线，
+将 SimAI 实际就绪的 flow 注入同一数据面。接口依据 SimAI 侧
+`/workspaces/SimAI/docs/pcie_switch/PCIe6_Simulation_Architecture.md`
+与当前 AstraNetworkAPI/SimCCL 源码，本地仿真架构 §11 定义适配合同。
 
 | 任务 | 产物（计划） | 验收 |
 |---|---|---|
-| M4-01 | ResultBundle转换与硬件页结果导入 | 旧硬件JSON/workspace分开、错误schema/单位/hash拒绝，旧快照保留 |
-| M4-02 | 硬件页参考/严格模式结果展示 | 所有指标/限制项/容量/样本/窗口/差异可见；零样本和截短不误报 |
-| M4-03 | FlowIR与拓扑/placement转换 | star/split/direct及graph模式、rank组、端口/lane/域合法性可检查 |
-| M4-04 | 显式P2P/collective replay及DAG调度 | 无依赖仅称traffic replay；接收完成真正阻塞后继，回调一次 |
-| M4-05 | 对比/模板/证据/历史版本 | config/source hash绑定；COMP目标独立profile及评估状态可追溯 |
-| M4-06 | 两仓库接口/构建smoke与runtime facade | BackendType增加PCIe、审查分支；SCons/CMake链接同一gem5模型；版本/byte/time语义固定；不复制Switch核心 |
+| M4-06 | 两仓库接口/构建 smoke，将 adapter 接到 M4A runtime | BackendType 增加 PCIe，SCons/CMake 链接同一 gem5 模型，版本/byte/time 语义固定 |
 | M4-07 | PcieNetwork API、匹配与callback | V-27至V-29/33：共享时间、recv/data先后、重复tag、源释放/目的可见、callback一次、有界注入/生命周期 |
 | M4-08 | 硬件/adapter同路径对照 | V-30：单对端Read/Write、64B/4KiB、incast/级联保持硬件计数与完成语义，无额外NVLink/NET send_lat |
 | M4-09 | 显式collective与SimCCL能力输入 | V-31：小规模Ring/Tree，算法/通道/依赖及字节守恒；PCIe-only禁用NVLS，端点归约计费 |
-| M4-10 | SimAI闭环DAG与MoE | V-32：Dispatch/Combine热点与compute依赖；降低带宽/加拥塞改变后续任务时刻；缺计算profile不输出TTFT/TPOT |
-| M4-11 | 结束/报告及原backend回归 | V-33/34：全rank/callback/drain后退出、未匹配/超时可诊断；两库版本与flow→TLP/cycle关联，Analytical/NS3不退化 |
+| M4-10 | 需求分析接入 SimAI 闭环 DAG 与 MoE | V-32：Dispatch/Combine 热点与 compute 依赖；降低带宽或加拥塞改变后续任务时刻；含计算 profile 时才报告 TTFT/TPOT |
+| M4-11 | 结束、联合结果与原 backend 回归 | V-33/34：全 rank/callback/drain 后退出，未匹配/超时可诊断；扩展 M4A ResultBundle 并关联两库版本与 flow→TLP/cycle；Analytical/NS3 基线通过 |
 
-退出：可完成“HTML配置→导出→CLI运行→结果导入→同口径比较”；页面离线
-参考功能和旧导出兼容。闭环TTFT/TPOT/step需计算profile与依赖，缺少时
-只报告通信指标。SimAI/SimCCL适配不得引入独立推进的第二个事件时钟。
-SimAI退出门还要求V-27–V-34全部适用case通过：硬件路径对照无无法解释
-差异，callback不早发/丢失/重复，所有rank共用time/queue；拥塞确实反馈
-DAG；原backend回归通过。scope未支持的协议/collective明确列出。
+M4B 出口门为 V-27–V-34 全部适用 case 通过。以 M4A 同配置的
+实际注入作对照，核对路径、计数、完成与排空；callback 只触发
+一次，所有 rank 共用 gem5 时间和队列，拥塞能改变后继任务时刻，
+原 backend 回归通过。闭环 TTFT/TPOT/step 需要计算 profile 和
+依赖，缺少时输出通信指标。M4A 和 M4B 分别提交代码、测试和证据。
 
 ## 7. M5：补充controller及产品扩展
 
@@ -232,7 +278,7 @@ DAG；原backend回归通过。scope未支持的协议/collective明确列出。
 
 | 目标组 | 对应COMP | 纳入阶段 | 输出证据 |
 |---|---|---|---|
-| 参数/规模/MPS | 01/03/15 | M0 schema，M2/M3扫描，M4展示 | port/lane/域预算与合法性；未知物理组合单列 |
+| 参数/规模/MPS | 01/03/15 | M0 schema，M2/M3扫描，M4A展示 | port/lane/域预算与合法性；未知物理组合单列 |
 | 时延/吞吐/尾延 | 04至08 | M2分项指标，M3详细/可选C/T | 测点、独立上限、负载、窗口和样本；target通过不等于硅规格 |
 | NTB/AI/管理/CXL | 02/09至14 | M5分支 | 缺能力时输出blocked-by-capability，不虚构结果 |
 | 外部对照/待核实 | 16至18 | M0登记、冻结前重核 | 原厂来源/日期/型号/测点、不可比字段及假设 |
@@ -282,7 +328,8 @@ vendored库来持久实现。先核查SCons发现/注册规则、版权和MAINTA
 | M1 | V-01至V-04参考子集、V-19/20/23参考子集 | 原M1产物完成；S-01–S-07全部符合参考判据；sizing/自动值/格式回归通过；oracle/窗口/容差锁定 |
 | M2 | V-03至V-15基础协议/有限资源、V-21、V-22 drain、V-23 timing、V-25 | 原M2产物完成；数据/身份/ordering与所有权正确；S-08实际反压/有界排空；retry不双提交；资源守恒且无静默溢出 |
 | M3 | V-06/10/13详细子集、V-16至V-18、V-23/24详细目标、V-35周期合同 | 原M3产物完成；所选FLIT/FC/replay条款和independent traces通过；错误恢复/重复抑制/排空；目标与正确性分别评价 |
-| M4 | V-20系统子集、V-26、V-27至V-34，按需V-25联动 | 原M4及新增SimAI产物完成；M3周期门已通过；共享gem5 runtime、匹配/callback/同路径对照/collective/DAG/结束回归通过；页面离线/旧格式不退化 |
+| M4A | V-20系统子集、V-26、V-36、V-37 | 配置实际创建 gem5 拓扑，独立 workload 完成与排空，ResultBundle 回导并保留旧格式，提供可重放对照 |
+| M4B | V-27至V-34，按需V-25联动 | 已通过 M4A；共享 gem5 runtime，匹配/callback/同路径对照/collective/DAG/结束及旧 backend 回归通过 |
 | M5 | 各extension先新增controller/CFG/NTB/AI/CXL/RAS场景；V-22 reset、V-24扩展 | 对实际声明支持的分支逐项满足原入口/验收合同；未实现记缺能力，不因基础阶段通过而扩大支持声明 |
 
 共同退出要求：阶段必需case无FAIL/skip/xfail，required bins全命中；
@@ -295,14 +342,15 @@ vendored库来持久实现。先核查SCons发现/注册规则、版权和MAINTA
 合同变更独立解释，不倒推expected迎合DUT。完整OS/外部工具和未支持
 扩展不作为核心unit/timing场景前置，也不能替代这些场景。
 
-当前状态见 [M0验收记录](validation/M0.md) 和
-[M1验收记录](validation/M1.md)。下一阶段为 M2 有限资源模型。
+当前阶段证据见 [一键验证](validation.md) 和
+[M3 验收记录](validation/M3.md)。下一阶段为 M4A。
 单元函数用于测试分段/分配/仲裁，事件/背压/完成行为在 gem5 timing
 场景验收。
 
 ## 12. SimAI需求追踪
 
-需求§12的SIM-01对应M3-06/V-35；SIM-02/10对应M4-08/V-30；
+需求§12的SIM-01对应M3-06/V-35。M4A 的 V-36/37 和 V-20/26
+为 M4B 提供配置、独立运行和结果基线。SIM-02/10对应M4-08/V-30；
 SIM-03/16对应M4-06/11及V-34；SIM-04/05/06/07/15对应M4-07/11及
 V-27/28/29/33；SIM-08/09对应M4-09/V-31；SIM-11/12/13/14对应
 M4-03/04/05/10及V-09/15/20/26/30/32。实现前冻结每个SIM项的
@@ -319,7 +367,8 @@ required子case，Train/Prefill/Decode/Diffusion分别有DAG fixture，
 | M2-04 | 硬件§11.6/11.7 grant/bank/Fabric/staging；仿真§14.3/14.4 phase与伪代码 | V-12/14/21/23 |
 | M2-05/07 | 仿真§4.1/14.2/14.6/14.7 Packet、callback、失败与debug | V-22/25 |
 | M3-01至M3-04/06 | 硬件§11.4/11.7/11.8/11.9：所选条款、分组FC、周期trace | V-10/13/16至V-18/35 |
-| M4-06至M4-11 | 仿真§11与§14.6共用runtime/完成路径，不能旁路数据面 | V-27至V-34 |
+| M4-01至M4-05、M4-12 | 仿真§2.3、§11.2、§14.2，独立配置建图、flow 提交与结果文件 | V-20/26/36/37 |
+| M4-06至M4-11 | 仿真§11与§14.6共用 M4A runtime/完成路径 | V-27至V-34 |
 
 详细设计是拟实现合同，M0配置验收没有实现上述模块。每项任务先按此
 合同写fixture/checker，协议policy或优化ordering域改变时补相应反例，
@@ -343,5 +392,5 @@ required子case，Train/Prefill/Decode/Diffusion分别有DAG fixture，
   时间分解和窗口，而非固定switchNs；V-10包含保守ordering的HOL反例。
 - P-04/P-13预算或PHY/endpoint证据不全保持OPEN；P-11/12待业务输入，
   不阻塞已有schema/模块开发，但阻止对应产品性能承诺冻结。
-- M4只使用已验收cycle profile接入SimAI；比较模型step/TPOT/collective
+- M4B使用 M4A 验收的 runtime 与 cycle profile 接入SimAI；比较模型step/TPOT/collective
   需相同compute/workload/拓扑/算法，不能把COMP宣传数值当预期结果。

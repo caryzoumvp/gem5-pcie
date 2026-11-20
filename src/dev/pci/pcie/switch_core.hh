@@ -86,6 +86,8 @@ struct SwitchLimits
     uint32_t ingressCdcCycles = 0;
     uint32_t egressCdcCycles = 0;
     bool pipelined = false;
+    std::vector<Tick> ingressLinkCycles{};
+    std::vector<Tick> egressLinkCycles{};
 };
 
 /** Bounded store-and-forward switch. The caller supplies an RX-backed TLP
@@ -226,6 +228,7 @@ class SwitchCore
     void serveBeats(Tick now, Id id, uint32_t cells, Stage stage,
                     uint32_t resource, LinkDirection::Event complete);
     bool canStage(const Transfer &transfer) const;
+    Tick portCycle(uint32_t port, bool ingress) const;
     Tick service(uint32_t cells) const;
 
     SwitchLimits limits;

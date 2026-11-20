@@ -30,18 +30,28 @@ const vm = require("node:vm");
 
 const html =
     fs.readFileSync("docs/pcie_switch/PCIe6_Scaleup_Lab_Offline.html", "utf8");
-const sizingStart = html.indexOf("modules['hardware-sizing.mjs'] =");
-const simEnd = html.indexOf("modules['hardware-page.mjs'] =", sizingStart);
-const benchStart = html.indexOf("function runBench(){", simEnd);
-const benchEnd = html.indexOf("return cases.map", benchStart);
-
-if ([ sizingStart, simEnd, benchStart, benchEnd ].some(pos => pos === -1)) {
-    throw new Error("Offline lab modules or benchmark list changed");
+const modules = [...html.matchAll(/^modules\['([^']+)'\] =/gm) ];
+function moduleSource(name)
+{
+    const index = modules.findIndex(([, path ]) => path === name);
+    if (index === -1 || index + 1 === modules.length) {
+        throw new Error(`Cannot locate the offline lab module ${name}`);
+    }
+    return html.slice(modules[index].index, modules[index + 1].index);
 }
 
-const definitions = html.slice(benchStart, benchEnd) + "return cases;}\n";
-const results =
-    vm.runInNewContext(html.slice(sizingStart, simEnd) + definitions + `
+const benchStart = html.indexOf("function runBench(){");
+const benchEnd = html.indexOf("return cases.map", benchStart);
+
+if (benchStart === -1 || benchEnd === -1) {
+    throw new Error("Offline lab benchmark list changed");
+}
+
+// The sizing and simulator modules are the reference benchmark dependencies.
+const definitions = moduleSource("hardware-sizing.mjs") +
+                    moduleSource("hardware-sim.mjs") +
+                    html.slice(benchStart, benchEnd) + "return cases;}\n";
+const results = vm.runInNewContext(definitions + `
     const {hardwareDefaults, sizeHardware} = modules['hardware-sizing.mjs'];
     const {simulateHardware} = modules['hardware-sim.mjs'];
     const cases = runBench();
@@ -53,7 +63,7 @@ const results =
         return ['S-0' + (index + 1), {name, diff, inputs, sim}];
     }));
     `,
-                       {modules : {}}, {timeout : 5000});
+                                   {modules : {}}, {timeout : 5000});
 console.log(JSON.stringify({
     source_sha256 : crypto.createHash("sha256").update(html).digest("hex"),
     cases : results,

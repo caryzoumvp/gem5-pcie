@@ -43,8 +43,13 @@ GTest('pcie_switch_core.test', 'switch_core.test.cc', 'switch_core.cc',
       'core_resources.cc', 'ordering.cc', 'link.cc', 'endpoint_memory.cc',
       'request.cc')
 
-SimObject('PcieTiming.py', sim_objects=['PcieTiming'])
+SimObject('PcieTiming.py', sim_objects=['PcieTiming', 'PcieTreeEndpoint',
+                                      'PcieTreeLink', 'PcieTreeSwitch'])
 Source('timing.cc')
+Source('tree_topology.cc')
+GTest('pcie_tree_topology.test', 'tree_topology.test.cc', 'tree_topology.cc')
+SimObject('PcieWorkload.py', sim_objects=['PcieWorkload'])
+Source('workload.cc')
 SimObject('PcieTrafficTester.py', sim_objects=['PcieTrafficTester'])
 Source('traffic_tester.cc')
 SimObject('PcieBenchmark.py', sim_objects=['PcieBenchmark'])

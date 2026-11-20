@@ -35,7 +35,7 @@ def extract_fields(html_path):
     """Run only the isolated browser-free field module, with a VM timeout."""
     source = Path(html_path).read_text()
     start = source.index("modules['hardware-sizing.mjs'] = (() => {")
-    end = source.index("modules['hardware-sim.mjs']", start)
+    end = source.index("\nmodules['", start)
     script = """
 const vm = require('vm');
 let text = '';

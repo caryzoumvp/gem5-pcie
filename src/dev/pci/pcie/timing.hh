@@ -32,6 +32,7 @@
 #include <array>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -40,6 +41,7 @@
 #include "dev/pci/pcie/endpoint_memory.hh"
 #include "dev/pci/pcie/flit_link.hh"
 #include "dev/pci/pcie/switch_core.hh"
+#include "dev/pci/pcie/tree_topology.hh"
 #include "mem/port.hh"
 #include "params/PcieTiming.hh"
 #include "sim/clocked_object.hh"
@@ -71,6 +73,11 @@ class PcieTiming : public ClockedObject
     std::map<std::string, uint64_t> report() const;
     std::vector<std::string> waitGraph() const;
     const std::vector<std::array<uint64_t, 5>> &coreTrace() const;
+    using VisibilityObserver = std::function<void(PacketId, bool)>;
+    using RouteObserver =
+        std::function<void(PacketId, size_t, bool, TlpClass)>;
+    void setVisibilityObserver(VisibilityObserver observer);
+    void setRouteObserver(RouteObserver observer);
 
   private:
     class CpuPort : public ResponsePort
@@ -113,6 +120,7 @@ class PcieTiming : public ClockedObject
         std::unique_ptr<Packet> packet;
         Op op;
         size_t source;
+        PacketId packetId;
         Addr base;
         uint32_t bytes;
         std::vector<ByteRange> segments;
@@ -183,6 +191,9 @@ class PcieTiming : public ClockedObject
     void targetDone(size_t index, Id id);
     void sourceCompletion(size_t index, Id id);
     void arrive(size_t edge, bool forward, Id id);
+    void arriveTree(TreeTopology::Direction wire, Id id);
+    void enterCore(size_t core, uint32_t ingress, uint32_t egress,
+                   TreeTopology::Direction wire, Id id);
     void arriveFlit(size_t edge, bool forward, Id id, const FlitTlp &packet);
     void departure(size_t edge, bool forward, Id id);
     void progressDrain();
@@ -195,11 +206,24 @@ class PcieTiming : public ClockedObject
     std::optional<ReadKey> allocateTag(size_t index, ByteRange range);
     size_t targetEdge(size_t index = 0) const;
     size_t targetForAddress(Addr address) const;
+    size_t targetForRange(Addr address, uint32_t bytes) const;
+    uint16_t requesterId(size_t index) const;
+    uint16_t completerId(Addr address) const;
+    EndpointMemory &targetMemory(size_t index);
+    TreeTopology::Direction sourceWire(size_t index) const;
+    TreeTopology::Direction targetWire(size_t index) const;
+    LinkTiming treeLinkTiming(TreeTopology::Direction wire) const;
+    void buildTree();
+    void configureTreeSwitch(size_t index, SwitchLimits &limits) const;
     std::optional<size_t> sendingCore(size_t edge, bool forward) const;
 
     const PcieTimingParams &settings;
     const AddrRange window;
     EndpointMemory memory;
+    std::unique_ptr<TreeTopology> tree;
+    std::vector<AddrRange> treeWindows;
+    std::vector<std::unique_ptr<EndpointMemory>> treeMemories;
+    std::map<uint16_t, size_t> requesterLeaves;
     ReadTracker tracker;
     std::vector<Source> sources;
     std::vector<Target> targets;
@@ -223,6 +247,8 @@ class PcieTiming : public ClockedObject
     Tick firstWriteResponse = 0;
     Tick firstWriteVisible = 0;
     Tick lastReadComplete = 0;
+    VisibilityObserver visibilityObserver;
+    RouteObserver routeObserver;
 };
 
 } // namespace gem5::pcie

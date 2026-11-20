@@ -41,22 +41,24 @@ fixture与独立规则。允许的多种仲裁/分段策略用允许结果集合
 | V-17 | Shared FC TX能力、RX开/关、VC池耗尽 | gate/update与协商profile一致，计数/usage不越界 | M3 |
 | V-18 | ACK延迟、NAK/timeout、replay满/重复到达 | 保护副本存在、重发占wire、DLP更新、payload只交付一次 | M3 |
 | V-19 | HTML S-01–S-07真实diff | 需求§7阈值；S-07预期捕获峰值超限，不当作有限容量通过 | M1 |
-| V-20 | 硬件JSON/null、workspace及未知schema | round-trip完整，错误格式拒绝、旧结果hash不覆盖 | M1/M4 |
+| V-20 | 硬件JSON/null、workspace及未知schema | round-trip完整，错误格式拒绝、旧结果hash不覆盖 | M1/M4A |
 | V-21 | 同Tick入队/FC更新/服务完成、仲裁已pending | 确定顺序、无双grant/重复调度，资源计数正确 | M2 |
 | V-22 | 资源/队列/Tag/响应在途时drain与明确支持的reset | drain完整完成；reset按已定义失败/清理合同；无幽灵响应/泄漏 | M2 drain/M5 reset |
 | V-23 | port/Fabric/replay容量及链路/端点延迟扫描 | 独立预算与可解释瓶颈；测量起止/单位/窗口正确，不双计RTT | M1/M2/M3 |
 | V-24 | COMP容量/时延/吞吐/P99与扩展profile | 目标/假设/缺能力/不可比/结果区分；profile显式override | M0登记/M3评估/M5扩展 |
 | V-25 | gem5 Packet请求/响应retry、posted接管/sink可见 | false不夺包、重试不双执行、Read完整响应、drain正确 | M2 |
-| V-26 | 页面导入、DAG依赖、历史结果/单位/模式 | 真正完成才推进任务；快照/hash绑定，无误标后端精度 | M4 |
-| V-27 | 多rank sim_schedule/sim_get_time、零delta/时间单位/边界 | 全rank同gem5时间，事件不逆因果；整数转换/舍入一致、同Tick callback无inline重入 | M4 |
-| V-28 | recv先到/data先到、相同tag并发、不同communicator/channel | 按明确key/sequence匹配一次，无串消息/丢数据；byte/count/type与调用链一致 | M4 |
-| V-29 | Write push/Read pull、源可复用早于目的可见 | send/recv按各自合同callback；后继不早于所需完成；Read方向正确、全部Cpl齐后完成 | M4 |
-| V-30 | 相同profile的standalone和SimAI P2P/Read/Write/incast | 以实际相同release时刻/地址/数据对照trace/字节/路径/资源与完成时间，无重复latency；软件排队差异单列 | M4 |
-| V-31 | 2/8-rank Ring AllReduce、显式Tree、PCIe-only SimCCL | Ring每rank字节2×(N−1)/N×tensor及阶段依赖正确；Tree独立expected；无NVLS隐式路径/免费INC | M4 |
-| V-32 | Train/Prefill/Decode/Diffusion各自compute/通信DAG与MoE热点，缩小ISL/Fabric或端点窗口 | 拥塞改变通信及后继释放时刻；Dispatch/Combine按token/专家映射守恒；关闭compute profile不输出模型级指标 | M4 |
-| V-33 | 有界注入/匹配队列、各rank错时finish、未匹配与超时 | 无无限payload积压/静默拒绝；全rank+callback+drain结束一次；孤立rank finish不提前退出，错误可诊断 | M4 |
-| V-34 | PCIe新增BackendType/构建模式、NS3/Analytical旧case | 新backend明确选中，旧backend基线/初始化不退化；两个仓库版本可关联 | M4 |
-| V-35 | cycle profile：parser/bank/RAM/arbiter/Fabric/staging/CDC边沿 | 独立小参数周期trace：服务率、grant/占用/释放时刻、瓶颈与量化规则正确；此门先于SimAI执行 | M3 |
+| V-26 | HTML 配置导出、gem5 结果导入、历史结果/单位/模式 | 快照/hash 绑定，区分参考和周期结果；旧格式、离线及比较保留 | M4A |
+| V-27 | 多rank sim_schedule/sim_get_time、零delta/时间单位/边界 | 全rank同gem5时间，事件不逆因果；整数转换/舍入一致、同Tick callback无inline重入 | M4B |
+| V-28 | recv先到/data先到、相同tag并发、不同communicator/channel | 按明确key/sequence匹配一次，无串消息/丢数据；byte/count/type与调用链一致 | M4B |
+| V-29 | Write push/Read pull、源可复用早于目的可见 | send/recv按各自合同callback；后继不早于所需完成；Read方向正确、全部Cpl齐后完成 | M4B |
+| V-30 | 相同profile的standalone和SimAI P2P/Read/Write/incast | 以实际相同release时刻/地址/数据对照trace/字节/路径/资源与完成时间，无重复latency；软件排队差异单列 | M4B |
+| V-31 | 2/8-rank Ring AllReduce、显式Tree、PCIe-only SimCCL | Ring每rank字节2×(N−1)/N×tensor及阶段依赖正确；Tree独立expected；无NVLS隐式路径/免费INC | M4B |
+| V-32 | Train/Prefill/Decode/Diffusion各自compute/通信DAG与MoE热点，缩小ISL/Fabric或端点窗口 | 拥塞改变通信及后继释放时刻；Dispatch/Combine按token/专家映射守恒；关闭compute profile不输出模型级指标 | M4B |
+| V-33 | 有界注入/匹配队列、各rank错时finish、未匹配与超时 | 无无限payload积压/静默拒绝；全rank+callback+drain结束一次；孤立rank finish不提前退出，错误可诊断 | M4B |
+| V-34 | PCIe新增BackendType/构建模式、NS3/Analytical旧case | 新backend明确选中，旧backend基线/初始化不退化；两个仓库版本可关联 | M4B |
+| V-35 | cycle profile：parser/bank/RAM/arbiter/Fabric/staging/CDC边沿 | 独立小参数周期trace：服务率、grant/占用/释放时刻、瓶颈与量化规则正确；此门先于 M4A | M3 |
+| V-36 | 配置驱动实际 gem5 拓扑，单颗/级联/分支和非法配置 | 创建的端口、窗口、链路、路由及生效参数与配置一致；逐跳计数能区分拓扑；非法输入启动前拒绝 | M4A |
+| V-37 | gem5 独立 P2P、incast、collective 流与通信 DAG | 从配置发流，数据/资源守恒，依赖按实际完成推进，停发后有界排空，结果可独立重放 | M4A |
 
 表中多阶段场景按子case标注required阶段；不能因后续可选扩展未实现而
 阻塞前阶段，也不能把未来测试计为当前通过。M5的controller/NTB/AI/CXL
@@ -284,13 +286,31 @@ watchdog根据预算检查并dump等待图，不强制回收资源伪装PASS。�
 ## 5. 阶段检查和扩展
 
 M0冻结测试输入/规则；每项M1–M5任务先提交相关场景、checker和退出
-标准，再实现任务。计划原有实现产物/依赖不变，阶段退出详见实施计划§11；SimAI的V-27–V-34须在M3的V-35周期门及
-相应协议覆盖通过后执行。
+标准，再实现任务。M3 的 V-35 及所选协议验收之后，先完成 M4A 的
+V-20/26/36/37，再执行 M4B 的 SimAI V-27–V-34。阶段退出详见实施计划 §11。
 M0 已通过本地配置验收。M1 的执行入口、oracle 与阶段证据分别见
 `tests/gem5/pcie/` 和 [M1验收记录](validation/M1.md)。
 
 SystemC/RTL不作为本项目的必经降低阶段；若未来另行开展硬件验证，独立
 定义接入目标与验收，不能挤占当前gem5 Switch仿真实现路线。
+
+### M4A 配置到运行的独立预期
+
+- **V-36** 从 JSON 构建单颗 star、双颗级联及含空闲支路的透明树，
+  核对生成的对象、端口、地址窗口和每条双向链路。对齐 64 B Read
+  采用 MPS 256 B、MRRS 512 B、RCB 128 B，独立预期是选定路径
+  每跳一个 MemRd 和一个反向 CplD，空闲支路零数据 TLP。改变选定
+  链路的时钟/宽度时验证该链路服务时刻，其他链路的配置值仍可追溯。
+  重复 port、窗口重叠、超 lane 与不合法路径在实例化前返回诊断。
+- **V-37** 用 gem5 独立运行 64 B/4 KiB Read/Write、8→1 及显式
+  collective 流。DAG fixture 在同一地址写入已知数据，再按目标
+  可见事件释放依赖读；读回字节与完成次数需精确匹配。延迟写
+  目标服务后，后继读在新的可见时刻之后才可发起。停发后所有
+  接管事务完成且等待图为空。归档配置、flow/release ticks、路径、
+  payload、完成与结果 hash 供 V-30 重放。
+- **V-26** 从离线 HTML 导出 V-36/37 fixture 并导回 CLI 结果。
+  检查窗口、模式、配置哈希和数值保持，拒绝错单位/schema/hash；
+  重开页面后原参考结果和旧格式仍能复现。
 
 ## 6. SimAI需求覆盖
 
@@ -298,6 +318,7 @@ SystemC/RTL不作为本项目的必经降低阶段；若未来另行开展硬件
 SIM-03/05/08，V-29覆盖SIM-06，V-30覆盖SIM-02/10/13/14，V-31覆盖
 SIM-08/09/12，V-32覆盖SIM-11/12/13/14，V-33覆盖SIM-06/07/15，
 V-34覆盖SIM-03/16，V-35覆盖SIM-01。结果/版本还结合V-20/26。
+M4B 的 V-30 使用 M4A 的 V-36/37 配置和独立实际完成 trace 作同路径基线。
 V-32分Train、Prefill、Decode、Diffusion和MoE子fixture，分别覆盖
 无争用/受控争用、完成依赖和输入compute profile；缺失子case不计覆盖。
 

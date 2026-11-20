@@ -137,6 +137,14 @@ SwitchCore::SwitchCore(SwitchLimits limits, LinkDirection::Schedule schedule,
          !limits.linkCycle)) {
         throw std::invalid_argument("invalid PCIe switch limits or callbacks");
     }
+    for (const auto *clocks :
+         {&limits.ingressLinkCycles, &limits.egressLinkCycles}) {
+        if (!clocks->empty() &&
+            (clocks->size() != limits.ports ||
+             std::find(clocks->begin(), clocks->end(), 0) != clocks->end())) {
+            throw std::invalid_argument("invalid PCIe switch port clocks");
+        }
+    }
     for (uint32_t port = 0; port < limits.ports; ++port) {
         resources.push_back(std::make_unique<CoreResources>(
             limits.ingress, limits.sectorBytes, limits.ingressMinimums));
@@ -211,7 +219,8 @@ SwitchCore::queueParser(Tick now, uint32_t ingress)
     if (parserPending[ingress]) {
         return;
     }
-    const auto next = after(now, limits.linkCycle - now % limits.linkCycle);
+    const auto cycle = portCycle(ingress, true);
+    const auto next = after(now, cycle - now % cycle);
     parserPending[ingress] = true;
     serviceSchedule(next, [this, next, ingress] {
         parserPending[ingress] = false;
@@ -224,7 +233,7 @@ SwitchCore::launchParser(Tick now, uint32_t ingress)
 {
     auto &queue = parserQueues[ingress];
     const auto done =
-        after(now, cycleDelay(limits.linkCycle, limits.parserCycles));
+        after(now, cycleDelay(portCycle(ingress, true), limits.parserCycles));
     const auto core_ready =
         limits.ingressCdcCycles
             ? after(aligned(done, limits.cycle),
@@ -522,9 +531,10 @@ SwitchCore::grant(Tick now)
             traceStage(Stage::FabricDone, done, id, channel);
             if (limits.egressCdcCycles) {
                 transfer.phase = Phase::EgressCdc;
-                const auto ready = after(
-                    aligned(done, limits.linkCycle),
-                    cycleDelay(limits.linkCycle, limits.egressCdcCycles));
+                const auto cycle = portCycle(transfer.tlp.egress, false);
+                const auto ready =
+                    after(aligned(done, cycle),
+                          cycleDelay(cycle, limits.egressCdcCycles));
                 schedule(ready, [this, ready, id] { txReady(ready, id); });
             } else {
                 txReady(done, id);
@@ -546,6 +556,14 @@ SwitchCore::grant(Tick now)
             schedule(done, std::move(finish));
         }
     }
+}
+
+Tick
+SwitchCore::portCycle(uint32_t port, bool ingress) const
+{
+    const auto &clocks =
+        ingress ? limits.ingressLinkCycles : limits.egressLinkCycles;
+    return clocks.empty() ? limits.linkCycle : clocks.at(port);
 }
 
 void

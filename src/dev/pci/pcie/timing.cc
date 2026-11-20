@@ -32,6 +32,7 @@
 #include <utility>
 
 #include "base/logging.hh"
+#include "dev/pci/pcie/tree_profiles.hh"
 #include "sim/cur_tick.hh"
 
 namespace gem5::pcie
@@ -69,7 +70,9 @@ PcieTiming::CpuPort::CpuPort(PcieTiming &owner, PortID index)
 AddrRangeList
 PcieTiming::CpuPort::getAddrRanges() const
 {
-    return {owner.window};
+    return owner.tree ? AddrRangeList(owner.treeWindows.begin(),
+                                      owner.treeWindows.end())
+                      : AddrRangeList{owner.window};
 }
 
 bool
@@ -113,7 +116,8 @@ PcieTiming::accessDrainedMemory(PacketPtr packet)
 
     const auto base = packet->getAddr();
     const auto bytes = packet->getSize();
-    if (!contains(window, base, bytes)) {
+    const auto target = targetForRange(base, bytes);
+    if (target == targets.size()) {
         if (packet->needsResponse()) {
             packet->makeResponse();
             packet->setBadAddress();
@@ -121,18 +125,19 @@ PcieTiming::accessDrainedMemory(PacketPtr packet)
         return;
     }
 
+    auto &store = targetMemory(target);
     const auto op = read ? Op::Read : Op::Write;
     for (const auto &range :
          splitRequests(op, base, bytes, settings.mps, settings.mrrs)) {
         const auto offset = range.address - base;
         if (write) {
             const auto *begin = packet->getConstPtr<uint8_t>() + offset;
-            panic_if(!memory.commitWrite(range.address, {begin, range.bytes}),
+            panic_if(!store.commitWrite(range.address, {begin, range.bytes}),
                      "PCIe local write failed address check");
         } else {
             auto *destination = packet->getPtr<uint8_t>() + offset;
             for (const auto &cpl :
-                 memory.completeRead({Requester, 0}, range, 0, settings.rcb)) {
+                 store.completeRead({Requester, 0}, range, 0, settings.rcb)) {
                 destination = std::copy(cpl.payload.begin(), cpl.payload.end(),
                                         destination);
             }
@@ -177,15 +182,19 @@ PcieTiming::PcieTiming(const PcieTimingParams &p)
       memory(p.base, p.window, p.mps),
       tracker(p.mps),
       sources(p.port_cpu_side_connection_count),
-      targets(p.bidirectional_endpoints ? sources.size() : 1)
+      targets(p.bidirectional_endpoints || !p.tree_links.empty()
+                  ? sources.size()
+                  : 1)
 {
     const uint32_t max_tlp_data = std::min(p.mps, p.max_transfer);
-    fatal_if(sources.empty() || sources.size() > 32 || !p.hops || p.hops > 8 ||
-                 !p.outstanding || !p.max_transfer || p.max_transfer % 4 ||
-                 p.endpoint_cycles == Cycles(0) || !p.tags || p.tags > 768 ||
-                 !p.header_credits || !p.link_width || !p.core_descriptors ||
-                 !p.core_sectors || p.mrrs < 128 || p.mrrs > 4096 ||
-                 (p.mrrs & (p.mrrs - 1)) || !validRcb(p.rcb, true) ||
+    fatal_if(sources.empty() ||
+                 (p.tree_links.empty() && sources.size() > 32) || !p.hops ||
+                 p.hops > 8 || !p.outstanding || !p.max_transfer ||
+                 p.max_transfer % 4 || p.endpoint_cycles == Cycles(0) ||
+                 !p.tags || p.tags > 768 || !p.header_credits ||
+                 !p.link_width || !p.core_descriptors || !p.core_sectors ||
+                 p.mrrs < 128 || p.mrrs > 4096 || (p.mrrs & (p.mrrs - 1)) ||
+                 !validRcb(p.rcb, true) ||
                  uint64_t{p.data_credits} * 16 < max_tlp_data,
              "%s: invalid PCIe timing geometry", name());
     fatal_if(p.bidirectional_endpoints &&
@@ -222,11 +231,13 @@ PcieTiming::PcieTiming(const PcieTimingParams &p)
     fatal_if(max_completions > p.completion_slots,
              "%s: Completion queue cannot hold one maximum Read", name());
 
+    buildTree();
     for (size_t i = 0; i < sources.size(); ++i) {
         sources[i].port = std::make_unique<CpuPort>(*this, i);
-        tracker.configure(Requester + i, {static_cast<uint16_t>(p.tags),
-                                          uint64_t{p.tags} * p.mrrs,
-                                          static_cast<uint16_t>(p.rcb), true});
+        tracker.configure(requesterId(i),
+                          {static_cast<uint16_t>(p.tags),
+                           uint64_t{p.tags} * p.mrrs,
+                           static_cast<uint16_t>(p.rcb), true});
     }
 
     const auto schedule = [this](Tick when, auto action) {
@@ -258,8 +269,9 @@ PcieTiming::PcieTiming(const PcieTimingParams &p)
         }
     }
 
-    const auto edges =
-        p.bidirectional_endpoints ? sources.size() : targetEdge() + 1;
+    const auto edges = tree                        ? p.tree_links.size()
+                       : p.bidirectional_endpoints ? sources.size()
+                                                   : targetEdge() + 1;
     for (size_t edge = 0; edge < edges; ++edge) {
         const auto direction = [&, edge](bool forward) -> Direction {
             const auto ready = [this, edge, forward](Tick when) {
@@ -273,8 +285,13 @@ PcieTiming::PcieTiming(const PcieTimingParams &p)
                 departure(edge, forward, id);
             };
             if (p.flit_detail) {
-                auto detailed = timing;
-                detailed.cycle = flit_cycle;
+                auto detailed =
+                    tree ? treeLinkTiming({edge, forward}) : timing;
+                if (!tree) {
+                    detailed.cycle = flit_cycle;
+                }
+                fatal_if(detailed.propagation > MaxTick - p.flit_fec_delay,
+                         "%s: invalid PCIe link propagation", name());
                 detailed.propagation += p.flit_fec_delay;
                 FlitLinkConfig config{
                     detailed,
@@ -336,17 +353,21 @@ PcieTiming::PcieTiming(const PcieTimingParams &p)
         limits.egressCdcCycles = p.egress_cdc_cycles;
     }
     const uint32_t maximum_cells = (max_tlp_data + 16 + 63) / 64;
-    fatal_if(maximum_cells > std::min(p.voq_cells, p.staging_cells) ||
-                 (max_tlp_data + 63) / 64 > p.core_sectors,
-             "%s: switch cannot hold one maximum TLP", name());
-    for (size_t hop = 0; hop < p.hops; ++hop) {
-        if (!hop) {
+    const size_t switches = tree ? p.tree_switches.size() : p.hops;
+    for (size_t hop = 0; hop < switches; ++hop) {
+        if (tree) {
+            configureTreeSwitch(hop, limits);
+        } else if (!hop) {
             limits.ports = edges - p.hops + 1;
             limits.bankCount = limits.ports;
         } else {
             limits.ports = 2;
             limits.bankCount = 2;
         }
+        fatal_if(maximum_cells >
+                         std::min(limits.voqCells, limits.stagingCells) ||
+                     (max_tlp_data + 63) / 64 > limits.ingress.sectors,
+                 "%s: switch %zu cannot hold one maximum TLP", name(), hop);
         SwitchCore::Trace trace;
         if (p.core_trace_limit) {
             trace = [this, hop](SwitchCore::TraceEvent event) {
@@ -361,6 +382,11 @@ PcieTiming::PcieTiming(const PcieTimingParams &p)
         cores.push_back(std::make_unique<SwitchCore>(
             limits, schedule,
             [this, hop](Tick, const ForwardTlp &tlp) {
+                if (tree) {
+                    const auto wire =
+                        tree->outgoing(sources.size() + hop, tlp.egress);
+                    return transmit(wire.edge, wire.forward, tlp.id);
+                }
                 if (settings.bidirectional_endpoints) {
                     return transmit(tlp.egress, false, tlp.id);
                 }
@@ -374,6 +400,90 @@ PcieTiming::PcieTiming(const PcieTimingParams &p)
             },
             service, std::move(trace)));
     }
+}
+
+void
+PcieTiming::buildTree()
+{
+    const auto &p = settings;
+    if (p.tree_links.empty()) {
+        fatal_if(!p.tree_endpoints.empty() || !p.tree_switches.empty(),
+                 "%s: PCIe tree profiles require physical links", name());
+        return;
+    }
+    fatal_if(!p.flit_detail || p.bidirectional_endpoints || p.hops != 1 ||
+                 p.tree_endpoints.size() != sources.size(),
+             "%s: invalid explicit PCIe tree mode or leaf count", name());
+
+    std::vector<TreeTopology::Edge> edges;
+    for (const auto *profile : p.tree_links) {
+        const auto &link = profile->params();
+        edges.push_back(
+            {{link.node_a, link.port_a}, {link.node_b, link.port_b}});
+    }
+    tree = std::make_unique<TreeTopology>(
+        sources.size(), p.tree_switches.size(), std::move(edges));
+    for (size_t i = 0; i < sources.size(); ++i) {
+        const auto &leaf = p.tree_endpoints[i]->params();
+        fatal_if(leaf.requester_id > UINT16_MAX || !leaf.size ||
+                     leaf.size > MaxAddr - leaf.base || leaf.base % 4096 ||
+                     leaf.size % 4096 ||
+                     !requesterLeaves.emplace(leaf.requester_id, i).second,
+                 "%s: invalid PCIe endpoint ID or address window", name());
+        const AddrRange range(leaf.base, leaf.base + leaf.size);
+        fatal_if(std::any_of(treeWindows.begin(), treeWindows.end(),
+                             [&](const auto &prior) {
+                                 return prior.intersects(range);
+                             }),
+                 "%s: overlapping PCIe endpoint windows", name());
+        treeWindows.push_back(range);
+        treeMemories.push_back(
+            std::make_unique<EndpointMemory>(leaf.base, leaf.size, p.mps));
+    }
+}
+
+LinkTiming
+PcieTiming::treeLinkTiming(TreeTopology::Direction wire) const
+{
+    const auto &link = settings.tree_links.at(wire.edge)->params();
+    return wire.forward ? LinkTiming{link.forward_width, link.forward_cycle,
+                                     link.forward_propagation,
+                                     link.forward_credit_delay}
+                        : LinkTiming{link.reverse_width, link.reverse_cycle,
+                                     link.reverse_propagation,
+                                     link.reverse_credit_delay};
+}
+
+void
+PcieTiming::configureTreeSwitch(size_t index, SwitchLimits &limits) const
+{
+    const auto &p = settings.tree_switches.at(index)->params();
+    const auto node = sources.size() + index;
+    limits.ports = tree->degree(node);
+    limits.bankCount = limits.ports;
+    limits.fabricChannels = p.fabric_channels;
+    limits.portsPerSlice = p.ports_per_slice;
+    limits.cellsPerCycle = p.fabric_cells;
+    limits.voqCells = p.voq_cells;
+    limits.stagingCells = p.staging_cells;
+    limits.ingress = {p.core_descriptors, p.core_sectors, p.active_voqs};
+    limits.crossSliceDelay = p.cross_slice_delay;
+    limits.parserSlots = p.parser_tlps_per_cycle;
+    limits.parserCycles = p.parser_cycles;
+    limits.ingressCdcCycles = p.ingress_cdc_cycles;
+    limits.egressCdcCycles = p.egress_cdc_cycles;
+    limits.ingressLinkCycles.clear();
+    limits.egressLinkCycles.clear();
+    size_t lanes = 0;
+    for (size_t port = 0; port < limits.ports; ++port) {
+        const auto wire = tree->outgoing(node, port);
+        lanes += settings.tree_links.at(wire.edge)->params().lanes;
+        limits.egressLinkCycles.push_back(treeLinkTiming(wire).cycle);
+        limits.ingressLinkCycles.push_back(
+            treeLinkTiming({wire.edge, !wire.forward}).cycle);
+    }
+    fatal_if(limits.ports > p.port_budget || lanes > p.lane_budget,
+             "%s: explicit PCIe switch exceeds physical budget", name());
 }
 
 void
@@ -451,15 +561,14 @@ PcieTiming::accept(size_t index, PacketPtr packet)
     Request request{std::unique_ptr<Packet>(packet),
                     op,
                     index,
+                    packet->id,
                     packet->getAddr(),
                     packet->getSize(),
                     {},
                     nullptr};
-    if (!contains(window, request.base, request.bytes) ||
-        targetForAddress(request.base) !=
-            targetForAddress(request.base + request.bytes - 1) ||
-        (settings.bidirectional_endpoints &&
-         targetForAddress(request.base) == index)) {
+    const auto destination = targetForRange(request.base, request.bytes);
+    if (destination == targets.size() ||
+        ((tree || settings.bidirectional_endpoints) && destination == index)) {
         request.failed = true;
     } else {
         request.segments = splitRequests(op, request.base, packet->getSize(),
@@ -478,12 +587,33 @@ PcieTiming::accept(size_t index, PacketPtr packet)
     ++source.outstanding;
     if (requests.at(id).remaining) {
         source.injection.push_back(id);
+    } else if (write && visibilityObserver) {
+        const auto packet_id = packet->id;
+        defer(curTick(),
+              [this, packet_id] { visibilityObserver(packet_id, false); });
     }
     if (write || requests.at(id).failed) {
         queueResponse(id);
     }
     wake();
     return true;
+}
+
+void
+PcieTiming::setVisibilityObserver(VisibilityObserver observer)
+{
+    fatal_if(visibilityObserver || !observer,
+             "%s: PCIe visibility observer can only be registered once",
+             name());
+    visibilityObserver = std::move(observer);
+}
+
+void
+PcieTiming::setRouteObserver(RouteObserver observer)
+{
+    fatal_if(routeObserver || !observer,
+             "%s: PCIe route observer can only be registered once", name());
+    routeObserver = std::move(observer);
 }
 
 void
@@ -556,7 +686,7 @@ std::optional<ReadKey>
 PcieTiming::allocateTag(size_t index, ByteRange range)
 {
     for (uint16_t tag = 0; tag < settings.tags; ++tag) {
-        ReadKey key{static_cast<uint16_t>(Requester + index), tag};
+        ReadKey key{requesterId(index), tag};
         if (tracker.begin(key, range, 0)) {
             return key;
         }
@@ -600,7 +730,8 @@ PcieTiming::inject(size_t index)
                 makeMessage({id, TlpClass::NonPosted, range, nullptr, tag});
         }
     }
-    auto result = transmit(index, true, *source.candidate);
+    const auto wire = sourceWire(index);
+    auto result = transmit(wire.edge, wire.forward, *source.candidate);
     panic_if(result == SendResult::Invalid, "Invalid PCIe source TLP");
     if (result == SendResult::Accepted) {
         source.candidate.reset();
@@ -662,9 +793,10 @@ PcieTiming::targetDone(size_t index, Id id)
 {
     auto &target = targets[index];
     auto &msg = messages.at(id);
+    auto &store = targetMemory(index);
     if (msg.type == TlpClass::Posted) {
         const bool visible =
-            memory.commitWrite(msg.range.address, *msg.payload);
+            store.commitWrite(msg.range.address, *msg.payload);
         if (visible) {
             if (!writes) {
                 firstWriteVisible = curTick();
@@ -675,7 +807,7 @@ PcieTiming::targetDone(size_t index, Id id)
         finishPiece(msg.parent, !visible);
     } else {
         for (auto &cpl :
-             memory.completeRead(*msg.key, msg.range, 0, settings.rcb)) {
+             store.completeRead(*msg.key, msg.range, 0, settings.rcb)) {
             auto payload = std::make_shared<const std::vector<uint8_t>>(
                 std::move(cpl.payload));
             target.completions.push_back(
@@ -686,8 +818,8 @@ PcieTiming::targetDone(size_t index, Id id)
     }
     target.busy = false;
     ++target.served;
-    panic_if(!link(targetEdge(index), !settings.bidirectional_endpoints)
-                  .release(curTick(), id),
+    const auto wire = targetWire(index);
+    panic_if(!link(wire.edge, !wire.forward).release(curTick(), id),
              "Missing PCIe target RX owner");
     messages.erase(id);
     wake();
@@ -701,8 +833,8 @@ PcieTiming::sendCompletions(size_t index)
         return;
     }
 
-    const auto sent = transmit(
-        targetEdge(index), settings.bidirectional_endpoints, queue.front());
+    const auto wire = targetWire(index);
+    const auto sent = transmit(wire.edge, wire.forward, queue.front());
     panic_if(sent == SendResult::Invalid, "Invalid PCIe Completion at source");
     if (sent == SendResult::Accepted) {
         queue.pop_front();
@@ -713,7 +845,7 @@ void
 PcieTiming::sourceCompletion(size_t index, Id id)
 {
     const auto &msg = messages.at(id);
-    panic_if(msg.key->requester != Requester + index ||
+    panic_if(msg.key->requester != requesterId(index) ||
                  requests.at(msg.parent).source != index,
              "Misrouted PCIe Completion");
     Completion cpl{*msg.key, msg.byteCount, msg.lowerAddress, msg.status,
@@ -731,7 +863,8 @@ PcieTiming::sourceCompletion(size_t index, Id id)
     } else if (result.disposition == Receipt::Failed) {
         finishPiece(msg.parent, true);
     }
-    panic_if(!link(index, false).release(curTick(), id),
+    const auto wire = sourceWire(index);
+    panic_if(!link(wire.edge, !wire.forward).release(curTick(), id),
              "Missing PCIe Requester RX owner");
     messages.erase(id);
     wake();
@@ -759,6 +892,9 @@ PcieTiming::finishPiece(Id id, bool failed)
         queueResponse(id);
     } else {
         source.completedWritePackets += !request.failed;
+        if (visibilityObserver) {
+            visibilityObserver(request.packetId, !request.failed);
+        }
         retire(id);
     }
 }
@@ -785,13 +921,20 @@ PcieTiming::transmit(size_t edge, bool forward, Id id)
         ++wire.accepted[static_cast<size_t>(msg.type)];
         wire.dataBytes += msg.dataBytes();
         wire.tlpBytes += msg.headerBytes(bool(wire.flit)) + msg.dataBytes();
+        if (routeObserver) {
+            routeObserver(requests.at(msg.parent).packetId, edge, forward,
+                          msg.type);
+        }
     }
     wire.creditStalls += result == SendResult::NoCredit;
     wire.busyStalls += result == SendResult::Busy;
     creditStalls += result == SendResult::NoCredit;
-    const bool to_target = settings.bidirectional_endpoints
-                               ? !forward && msg.type != TlpClass::Completion
-                               : forward && edge == targetEdge();
+    const bool to_target =
+        tree ? tree->receiver({edge, forward}).node < sources.size() &&
+                   msg.type != TlpClass::Completion
+        : settings.bidirectional_endpoints
+            ? !forward && msg.type != TlpClass::Completion
+            : forward && edge == targetEdge();
     targetCreditStalls += to_target && result == SendResult::NoCredit;
     wireStalls += result == SendResult::Busy;
     return result;
@@ -802,12 +945,11 @@ PcieTiming::makeFlitTlp(const Message &msg) const
 {
     auto data = msg.payload ? *msg.payload : std::vector<uint8_t>{};
     const auto &request = requests.at(msg.parent);
-    const auto requester = static_cast<uint16_t>(Requester + request.source);
+    const auto requester = requesterId(request.source);
     if (msg.type == TlpClass::Completion) {
-        return FlitCompletion{
-            static_cast<uint16_t>(0x200 + targetForAddress(msg.range.address)),
-            {*msg.key, msg.byteCount, msg.lowerAddress, msg.status,
-             std::move(data), 0}};
+        return FlitCompletion{completerId(msg.range.address),
+                              {*msg.key, msg.byteCount, msg.lowerAddress,
+                               msg.status, std::move(data), 0}};
     }
     return FlitMemoryRequest{msg.type == TlpClass::Posted ? Op::Write
                                                           : Op::Read,
@@ -826,7 +968,7 @@ PcieTiming::arriveFlit(size_t edge, bool forward, Id id, const FlitTlp &packet)
         const auto cls =
             request->op == Op::Read ? TlpClass::NonPosted : TlpClass::Posted;
         panic_if(
-            msg.type != cls || request->key.requester != Requester + source ||
+            msg.type != cls || request->key.requester != requesterId(source) ||
                 request->trafficClass != 0 || msg.range != request->range ||
                 (msg.key && msg.key->tag != request->key.tag),
             "PCIe FLIT Request identity mismatch");
@@ -837,8 +979,7 @@ PcieTiming::arriveFlit(size_t edge, bool forward, Id id, const FlitTlp &packet)
         const auto &reply = std::get<FlitCompletion>(packet);
         const auto &decoded = reply.completion;
         panic_if(msg.type != TlpClass::Completion ||
-                     reply.completer !=
-                         0x200 + targetForAddress(msg.range.address) ||
+                     reply.completer != completerId(msg.range.address) ||
                      decoded.trafficClass != 0 ||
                      decoded.key.requester != msg.key->requester ||
                      decoded.key.tag != msg.key->tag,
@@ -863,14 +1004,77 @@ PcieTiming::targetEdge(size_t index) const
 size_t
 PcieTiming::targetForAddress(Addr address) const
 {
+    if (tree) {
+        return std::find_if(treeWindows.begin(), treeWindows.end(),
+                            [address](const auto &range) {
+                                return range.contains(address);
+                            }) -
+               treeWindows.begin();
+    }
     return settings.bidirectional_endpoints
                ? (address - settings.base) / (settings.window / targets.size())
                : 0;
 }
 
+size_t
+PcieTiming::targetForRange(Addr address, uint32_t bytes) const
+{
+    if (!tree && !contains(window, address, bytes)) {
+        return targets.size();
+    }
+    const auto target = targetForAddress(address);
+    if (target == targets.size() ||
+        (tree && !contains(treeWindows[target], address, bytes)) ||
+        (!tree && targetForAddress(address + bytes - 1) != target)) {
+        return targets.size();
+    }
+    return target;
+}
+
+uint16_t
+PcieTiming::requesterId(size_t index) const
+{
+    return tree ? settings.tree_endpoints.at(index)->params().requester_id
+                : Requester + index;
+}
+
+uint16_t
+PcieTiming::completerId(Addr address) const
+{
+    const auto target = targetForAddress(address);
+    return tree ? requesterId(target) : 0x200 + target;
+}
+
+EndpointMemory &
+PcieTiming::targetMemory(size_t index)
+{
+    return tree ? *treeMemories.at(index) : memory;
+}
+
+TreeTopology::Direction
+PcieTiming::sourceWire(size_t index) const
+{
+    return tree ? tree->outgoing(index, 0)
+                : TreeTopology::Direction{index, true};
+}
+
+TreeTopology::Direction
+PcieTiming::targetWire(size_t index) const
+{
+    return tree ? tree->outgoing(index, 0)
+                : TreeTopology::Direction{targetEdge(index),
+                                          settings.bidirectional_endpoints};
+}
+
 std::optional<size_t>
 PcieTiming::sendingCore(size_t edge, bool forward) const
 {
+    if (tree) {
+        const auto &tx = tree->sender({edge, forward});
+        return tx.node < sources.size()
+                   ? std::nullopt
+                   : std::optional<size_t>(tx.node - sources.size());
+    }
     if (settings.bidirectional_endpoints) {
         return forward ? std::nullopt : std::optional<size_t>(0);
     }
@@ -888,6 +1092,10 @@ PcieTiming::sendingCore(size_t edge, bool forward) const
 void
 PcieTiming::arrive(size_t edge, bool forward, Id id)
 {
+    if (tree) {
+        arriveTree({edge, forward}, id);
+        return;
+    }
     const auto &msg = messages.at(id);
     const bool permutation = settings.bidirectional_endpoints;
     const bool is_completion = msg.type == TlpClass::Completion;
@@ -912,22 +1120,55 @@ PcieTiming::arrive(size_t edge, bool forward, Id id)
     const uint32_t ingress = forward ? (index ? 0 : edge) : downstream;
     uint32_t out =
         permutation ? targetForAddress(msg.range.address) : downstream;
-    std::optional<CompletionIdentity> completion;
     if (permutation ? is_completion : !forward) {
         panic_if(msg.type != TlpClass::Completion ||
                      msg.key->requester < Requester ||
                      size_t(msg.key->requester - Requester) >= sources.size(),
                  "Invalid PCIe Completion route");
-        completion = {msg.key->requester, msg.key->tag};
         out = index ? 0 : msg.key->requester - Requester;
     }
-    cores[index]->receive(curTick(),
-                          {id, ingress, out, 0, msg.type, 0, 0, completion,
-                           msg.headerBytes(settings.flit_detail), msg.payload},
-                          [this, edge, forward](Tick t, auto id) {
-                              panic_if(!link(edge, forward).release(t, id),
-                                       "Missing PCIe switch RX owner");
-                          });
+    enterCore(index, ingress, out, {edge, forward}, id);
+}
+
+void
+PcieTiming::arriveTree(TreeTopology::Direction wire, Id id)
+{
+    const auto &msg = messages.at(id);
+    const auto &rx = tree->receiver(wire);
+    const bool reply = msg.type == TlpClass::Completion;
+    const auto destination = reply ? requesterLeaves.at(msg.key->requester)
+                                   : targetForAddress(msg.range.address);
+    if (rx.node < sources.size()) {
+        panic_if(rx.node != destination, "Misrouted PCIe tree TLP");
+        if (reply) {
+            sourceCompletion(rx.node, id);
+        } else {
+            receiveTarget(rx.node, id);
+        }
+        return;
+    }
+    const auto index = rx.node - sources.size();
+    const auto out = tree->route(index, destination);
+    enterCore(index, rx.number, tree->sender(out).number, wire, id);
+}
+
+void
+PcieTiming::enterCore(size_t index, uint32_t ingress, uint32_t out,
+                      TreeTopology::Direction wire, Id id)
+{
+    const auto &msg = messages.at(id);
+    std::optional<CompletionIdentity> completion;
+    if (msg.type == TlpClass::Completion) {
+        completion = {msg.key->requester, msg.key->tag};
+    }
+    cores[index]->receive(
+        curTick(),
+        {id, ingress, out, 0, msg.type, 0, 0, completion,
+         msg.headerBytes(settings.flit_detail), msg.payload},
+        [this, wire](Tick t, auto id) {
+            panic_if(!link(wire.edge, wire.forward).release(t, id),
+                     "Missing PCIe switch RX owner");
+        });
 }
 
 void
@@ -953,7 +1194,7 @@ PcieTiming::idle() const
         const auto &source = sources[i];
         if (!source.injection.empty() || !source.responses.empty() ||
             source.candidate || source.outstanding ||
-            tracker.bytesReserved(Requester + i)) {
+            tracker.bytesReserved(requesterId(i))) {
             return false;
         }
     }
@@ -1055,7 +1296,7 @@ PcieTiming::report() const
         result[key + "completed_payload_bytes"] = source.completedPayloadBytes;
         result[key + "pending_packets"] = source.outstanding;
         result["source_completion_reservation_bytes"] +=
-            tracker.bytesReserved(Requester + i);
+            tracker.bytesReserved(requesterId(i));
     }
     for (size_t i = 0; i < cores.size(); ++i) {
         const auto counters = cores[i]->counts();

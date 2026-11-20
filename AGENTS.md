@@ -227,14 +227,16 @@ fidelity; a dedicated-credit approximation must be labeled accordingly.
 
 ### SimAI integration
 
-After the gem5 cycle-level profile passes M3 protocol/resource/timing checks,
-integrate SimAI through AstraNetworkAPI as M4. Read the SimAI-side design at
+After M3, complete M4A: build the actual gem5 topology from configuration,
+run standalone workloads, and round-trip configuration and results with the
+offline HTML. Require M4A acceptance before implementing or integrating
+SimAI through AstraNetworkAPI in M4B. Read the SimAI-side design at
 `/workspaces/SimAI/docs/pcie_switch/PCIe6_Simulation_Architecture.md` and audit
 current APIs before implementing. Reuse the same gem5 endpoint/link/switch
 runtime for microbenchmarks and workloads. All ranks share one event queue;
 message matching, send/receive completion, bounded injection, and DAG feedback
 need explicit tests. Do not duplicate the PCIe core or inherit NS3/NVLink
-latency/PFC behavior. UI/schema preparation may precede this cycle gate.
+latency/PFC behavior.
 
 ### New PCIe source attribution
 
@@ -246,7 +248,8 @@ institution's copyright holder. This supersedes the earlier MIT request.
 
 ### Stage completion and delegation
 
-For this PCIe project, implement one reviewable M0-M5 stage at a time.
+For this PCIe project, implement one reviewable stage at a time, with
+M4A and M4B accepted and committed separately.
 After its exit criteria pass, update the stage status and validation evidence,
 then commit the stage's code, tests, and documentation together. The user
 has authorized these stage commits; do not push without instruction. Do not

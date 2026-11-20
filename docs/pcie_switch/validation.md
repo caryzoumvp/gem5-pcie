@@ -1,7 +1,7 @@
 # PCIe 6.0 Switch 一键验证
 
 在仓库根目录执行一条命令，构建 NULL gem5 和 PCIe 单元测试，然后
-运行 M0–M3 回归：
+运行 M0–M4A 回归：
 
 ```sh
 python3 util/pcie_lab/validate.py
@@ -26,6 +26,7 @@ HTML。默认构建还需要 gem5 的 SCons 和编译依赖。
 | M1 | 从 HTML 重新生成 oracle 并比对 fixture，TestLib 对照 S-01–S-07 | [M1](validation/M1.md) |
 | M2 | C++ 单测和 TestLib 覆盖请求、重试、有限资源、反压和排空 | [M2](validation/M2.md) |
 | M3 | FLIT/FC/replay、注错、周期 trace、置换、26 组性能用例及两种回程的 SW-TAIL | [M3](validation/M3.md) |
+| M4A | 配置建图、独立 workload、结果回导和离线兼容 | [M4A](validation/M4A.md) |
 
 默认在仓库根目录为每次运行新建一个 `gem5-pcie-validation-*` 子目录。
 用 `--output-dir` 指定其他父目录。相对路径以启动命令时的工作目录为准。
@@ -45,6 +46,22 @@ python3 util/pcie_lab/validate.py --skip-build --output-dir /tmp/pcie-validation
 Shared FC TX 缺能力负例必须返回指定配置错误。其他意外结果使脚本
 非零退出，并打印对应日志位置。
 
-该入口覆盖 gem5 独立模拟的 M0–M3。M4 SimAI 闭环和 M5 扩展的
-验收边界见 [实施计划](PCIe6_Implementation_Plan.md) 和
+M4B SimAI 闭环和 M5 扩展的验收边界见 [实施计划](PCIe6_Implementation_Plan.md) 和
 [验证场景](PCIe6_Validation_Scenarios.md)。
+
+## 运行一个导出的周期实验
+
+在离线 HTML 的硬件页生成或载入 ExperimentSpec，再导出 JSON。
+在仓库根目录执行：
+
+```sh
+build/NULL/gem5.fast -d m5out configs/example/pcie/cycle.py \
+    util/pcie_lab/examples/cycle_star.json
+```
+
+也可将示例路径换成页面导出的文件。仿真接受以 ps 和 B 表示的
+单域透明树配置，输出 `m5out/cycle-result.json`。结果包含配置
+hash、实际连接和逐流链路计数、测量窗口、完成与排空信息。
+用硬件页的 gem5 结果入口导入，历史快照和独立参考实验分别保存。
+配置错误在创建 gem5 对象之前给出字段诊断。失败或截短的仿真仍保存
+结果文件，并以非零状态退出。

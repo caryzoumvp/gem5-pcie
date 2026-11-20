@@ -27,9 +27,65 @@
 from m5.objects.ClockedObject import ClockedObject
 from m5.params import (
     Param,
+    VectorParam,
     VectorResponsePort,
 )
-from m5.SimObject import PyBindMethod
+from m5.SimObject import (
+    PyBindMethod,
+    SimObject,
+)
+
+
+class PcieTreeEndpoint(SimObject):
+    type = "PcieTreeEndpoint"
+    cxx_class = "gem5::pcie::TreeEndpointProfile"
+    cxx_header = "dev/pci/pcie/tree_profiles.hh"
+
+    requester_id = Param.Unsigned("Requester/Completer ID")
+    base = Param.Addr("Start of the endpoint address window")
+    size = Param.Addr("Size of the endpoint address window in bytes")
+
+
+class PcieTreeLink(SimObject):
+    type = "PcieTreeLink"
+    cxx_class = "gem5::pcie::TreeLinkProfile"
+    cxx_header = "dev/pci/pcie/tree_profiles.hh"
+
+    node_a = Param.Unsigned("Ordinal of end A")
+    port_a = Param.Unsigned("Port number at end A")
+    node_b = Param.Unsigned("Ordinal of end B")
+    port_b = Param.Unsigned("Port number at end B")
+    lanes = Param.Unsigned("Number of configured lanes")
+    forward_width = Param.Unsigned("Wire bytes per cycle")
+    forward_cycle = Param.Tick("Link service cycle in ticks")
+    forward_propagation = Param.Tick("Link propagation in ticks")
+    forward_credit_delay = Param.Tick("FC coordination delay in ticks")
+    reverse_width = Param.Unsigned("Wire bytes per cycle")
+    reverse_cycle = Param.Tick("Link service cycle in ticks")
+    reverse_propagation = Param.Tick("Link propagation in ticks")
+    reverse_credit_delay = Param.Tick("FC coordination delay in ticks")
+
+
+class PcieTreeSwitch(SimObject):
+    type = "PcieTreeSwitch"
+    cxx_class = "gem5::pcie::TreeSwitchProfile"
+    cxx_header = "dev/pci/pcie/tree_profiles.hh"
+
+    port_budget = Param.Unsigned("Configured physical port budget")
+    lane_budget = Param.Unsigned("Configured lane budget")
+    core_descriptors = Param.Unsigned("Core descriptors per ingress")
+    core_sectors = Param.Unsigned("Payload sectors per ingress")
+    active_voqs = Param.Unsigned("Active VOQs per ingress")
+    voq_cells = Param.Unsigned("Cells per VOQ")
+    staging_cells = Param.Unsigned("Cells per egress staging area")
+    fabric_channels = Param.Unsigned("Parallel Fabric channels")
+    fabric_cells = Param.Unsigned("Cells per Fabric service cycle")
+    ports_per_slice = Param.Unsigned("Ports per physical slice")
+    cross_slice_delay = Param.Tick("Cross-slice delay in ticks")
+    parser_tlps_per_cycle = Param.Unsigned("Parser slots per port cycle")
+    parser_cycles = Param.Unsigned("Parser latency in link cycles")
+    ingress_cdc_cycles = Param.Unsigned("Ingress CDC in core cycles")
+    egress_cdc_cycles = Param.Unsigned("Egress CDC in link cycles")
 
 
 class PcieTiming(ClockedObject):
@@ -46,6 +102,13 @@ class PcieTiming(ClockedObject):
     ]
 
     cpu_side = VectorResponsePort("Timing requests from a synthetic Requester")
+    tree_endpoints = VectorParam.PcieTreeEndpoint(
+        [], "Explicit tree leaves in cpu_side order"
+    )
+    tree_switches = VectorParam.PcieTreeSwitch(
+        [], "Explicit tree switches, assigned ordinals after the leaves"
+    )
+    tree_links = VectorParam.PcieTreeLink([], "Explicit physical tree links")
     hops = Param.Unsigned(1, "Number of transparent switches in the chain")
     bidirectional_endpoints = Param.Bool(
         False, "Give each requester port an independent target window"

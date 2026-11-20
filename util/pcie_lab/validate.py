@@ -25,7 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-"""Build and validate the standalone gem5 PCIe switch through M3."""
+"""Build and validate the standalone gem5 PCIe switch."""
 
 import argparse
 import json
@@ -53,6 +53,7 @@ GTESTS = [
         "flit_integrity",
         "shared_fc",
         "flit_link",
+        "tree_topology",
     )
 ]
 PERFORMANCE = ROOT / "configs/example/pcie/performance.py"
@@ -191,6 +192,27 @@ def validate(output, jobs, skip_build):
             f"Expected PCIe TestLib cases without skips in {results}"
         )
 
+    browser = ROOT / "tests/pcie_switch/fixtures/test_cycle_html.js"
+    experiment = run(output, "cycle-html-export", "node", browser, "--export")
+    cycle_output = output / "cycle-html"
+    run(
+        output,
+        "cycle-html-gem5",
+        GEM5,
+        "-d",
+        cycle_output,
+        ROOT / "configs/example/pcie/cycle.py",
+        experiment,
+    )
+    run(
+        output,
+        "cycle-html-import",
+        "node",
+        browser,
+        "--result",
+        cycle_output / "cycle-result.json",
+    )
+
     run(
         output,
         "no-shared-tx",
@@ -237,9 +259,17 @@ def validate(output, jobs, skip_build):
             *flags,
         )
         verdicts[name] = check_result(folder / "tail-result.json", "PASS")
+    run(
+        output,
+        "cycle-html-competitor",
+        "node",
+        browser,
+        "--performance",
+        output / "bulk-read-wire" / "performance.json",
+    )
     summary = output / "performance-verdicts.json"
     summary.write_text(json.dumps(verdicts, indent=2) + "\n")
-    print(f"M0–M3 validation passed. Performance verdicts: {summary}")
+    print(f"M0–M4A validation passed. Performance verdicts: {summary}")
 
 
 def main():

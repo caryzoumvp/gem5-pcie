@@ -37,8 +37,10 @@ Base Spec 6.0定义协议，HTML定义功能和参考行为；databook是实现�
 SimAI不生成TLP/FLIT或管理硬件信用，gem5不自行选择模型并行策略或
 推进模型DAG。两者之间由`PcieNetwork + PcieRuntime facade`连接。
 
-本章描述M4的目标集成结构，当前只有M0配置合同已实现。SimAI执行在
-M3周期模型验收后接入；M0–M3仍可用synthetic输入独立运行gem5。
+本章描述 M4 的目标接口。当前 M0–M3 已提供配置合同、参考模型和
+原生周期 fixture；M4A 先把配置、真实拓扑、独立 workload 及 HTML
+结果回导连通。M4B 在 M4A 验收后接入 SimAI。以下 SimAI 数据流属于
+M4B。
 
 ### 2.1 层次划分和总体数据流
 
@@ -106,7 +108,14 @@ TPOT；gem5无外部PHY模型时也不声称输出电气或真实GPU执行指标
 
 ### 2.3 通信方式：初始化文件、运行时调用、结束后结果
 
-首版采用**同进程C++调用与异步callback**：gem5集成runner初始化硬件
+M4A 通过文件交换配置与结果。离线 HTML 导出版本化 `ExperimentSpec`，
+含拓扑、硬件、独立 workload 和测量合同。gem5 runner 编译
+`TopologyIR` / `WorkloadIR`，按配置构建实际 endpoint/port/link/
+switch，绑定地址窗口及路由。独立 workload 驱动有界 flow 接管并跟踪
+实际完成。运行结果保存有效拓扑、版本/hash、逐 flow 路径/计数和结束
+状态，排空后写 `ResultBundle`，用户将文件导回 HTML。
+
+M4B 采用**同进程C++调用与异步callback**：gem5集成runner初始化硬件
 对象和SimAI workload/adapter，所有rank的PcieNetwork持同一个runtime
 facade。SCons/CMake的链接边界与版本在M4-06验证，不能在SimAI复制
 一份硬件核心。以下为目标接口，尚未实现，不是现有可执行功能。
@@ -327,7 +336,11 @@ ResourceState/Counters持有，不能通过修改profile总容量解决运行时
 “0容量但无限接收”的模块。`slices`并行通道与forwarding_slices物理分区、
 `poolKiB`每入口payload与额外ECC/descriptor预算分别保留。
 
-### 3.6 WorkloadSpec、TaskRecord与Communicator：仅由SimAI调度
+### 3.6 WorkloadSpec、TaskRecord与Communicator
+
+M4A 的独立驱动只执行配置中显式的 flow 及通信依赖，使用 gem5
+完成事件释放后继。以下模型计算与 communicator 语义由 M4B 的
+SimAI 管理。
 
 **输入：** Train/Prefill/Decode/Diffusion配置、compute profile、模型/
 并行策略、rank placement和任务/collective描述。WorkloadSpec是只读
@@ -692,9 +705,15 @@ staging、时钟与CDC、占用/释放边沿有独立expected traces。所选FLI
 replay覆盖及小规模无错/注错场景通过后，冻结cycle profile与source hash。
 这不要求完整PHY/全部可选协议合规，但所有未支持项必须显式列出。
 
-SimAI接入执行须在上述门通过后。M4的JSON/UI准备可先做；不在预算模型
-阶段就把接口通了称为“已集成cycle-level SimAI”。也不等待全部M5可选
-产品功能才做基本PCIe-only workload。
+M3 周期门通过后先执行 M4A。M4A 将结构校验后的拓扑变成运行对象
+和路由表，验证链宽、时钟、容量与窗口的生效值，并运行独立 workload、
+排空和 HTML 回导。V-36 用对象映射和逐跳计数证明建图；V-37
+用独立 expected 证明 flow 的完成、依赖与排空；V-20/26 验证格式和
+浏览器回导。上述证据冻结后才能实施 M4B 接入。
+
+M4B 复用 M4A 的配置、拓扑构建器、runtime/完成入口与事件队列。
+V-30 用相同配置和实际 release ticks 核对独立运行与 adapter 的
+路径、数据与时序。基本 PCIe-only workload 采用 M3 已验收子集。
 
 ### 11.3 数据和时序闭环
 
@@ -891,7 +910,7 @@ effective、覆盖历史、source/contract/manifest hash及每字段UI单位；
 | LinkDirection | port/link内部组件 | 串行化、传播、FC/replay与对端RX，不独立推进时间 |
 | Store/Voq/Order/Allocator | 可GTest的普通C++组件 | 纯资源/关系决策及显式状态，不接收gem5 Packet |
 | PacketAdapter | RequestPort/ResponsePort边界 | Packet保留、retry/response、父事务映射；不再转发到旧PCI桥捷径 |
-| SimAIAdapter | M4客户端 | 持Flow/消息/callback映射，仅访问runtime facade |
+| SimAIAdapter | M4B客户端 | 持Flow/消息/callback映射，仅访问runtime facade |
 
 初始化顺序：读取M0/后续effective配置→创建endpoint/switch/link→绑定
 port和地址/ID路由→验证拓扑/容量/能力→建立RX承诺→注册统计与trace→
@@ -899,7 +918,7 @@ port和地址/ID路由→验证拓扑/容量/能力→建立RX承诺→注册统
 也要明确执行配置状态建立，不把所有limit设为无限。
 
 SCons分别注册SimObject/source及单元测试；host schema/sizing不依赖
-Simulator启动。M4桥接链接这些对象，不能再复制C++核心到SimAI临时目录。
+Simulator启动。M4B 桥接链接这些对象，不能再复制C++核心到SimAI临时目录。
 
 ### 14.2 消息类型与调用合同
 
@@ -1073,8 +1092,8 @@ M3实现时须新增版本化字段与测试，不偷偷将它塞入现有63字�
 
 M3报告把`correctness_status`、`target_status`与`evidence_level`分开：
 目标可以FAIL或尚不可比，但不能掩盖数据/协议错误；通过模型目标仍不是
-硅签核。只有M3周期门通过的profile才进入M4 SimAI，同profile在adapter
-前后检查；模型step/TPOT收益由闭环运行得出，不以switch降低若干ns直接
+硅签核。M4A 在已验收的 M3 profile 上建立独立运行基线，
+M4B 在接入 adapter 前后对照同一 profile。模型step/TPOT收益由闭环运行得出，不以switch降低若干ns直接
 乘成模型加速比。
 
 M3 的原生输入、每方向输出和阶段验收结果见

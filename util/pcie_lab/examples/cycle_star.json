@@ -1,0 +1,176 @@
+{
+    "format": "pcie6-cycle-experiment-v1",
+    "units": {
+        "time": "ps",
+        "payload": "B"
+    },
+    "hardware": {
+        "mps": 256,
+        "mrrs": 4096,
+        "rcb": 128,
+        "core_cycle_ps": 1000,
+        "max_transfer": 65536,
+        "data_credits": 32,
+        "flit_replay_timeout_ps": 170000
+    },
+    "topology": {
+        "kind": "transparent_tree",
+        "nodes": [
+            {
+                "id": "sw0",
+                "kind": "switch",
+                "port_budget": 9,
+                "lane_budget": 144
+            },
+            {
+                "id": "root",
+                "kind": "root",
+                "requester_id": 0,
+                "base": 0,
+                "size": 4096
+            },
+            {
+                "id": "dst0",
+                "kind": "endpoint",
+                "requester_id": 1,
+                "base": 4096,
+                "size": 4096
+            }
+        ],
+        "links": [
+            {
+                "id": "link0",
+                "a": {
+                    "node": "root",
+                    "port": 0
+                },
+                "b": {
+                    "node": "sw0",
+                    "port": 0
+                },
+                "lanes": 16,
+                "forward": {
+                    "width": 128,
+                    "cycle_ps": 1000,
+                    "propagation_ps": 2500,
+                    "credit_delay_ps": 180000
+                },
+                "reverse": {
+                    "width": 128,
+                    "cycle_ps": 1000,
+                    "propagation_ps": 2500,
+                    "credit_delay_ps": 180000
+                }
+            },
+            {
+                "id": "link1",
+                "a": {
+                    "node": "sw0",
+                    "port": 1
+                },
+                "b": {
+                    "node": "dst0",
+                    "port": 0
+                },
+                "lanes": 16,
+                "forward": {
+                    "width": 128,
+                    "cycle_ps": 1000,
+                    "propagation_ps": 2500,
+                    "credit_delay_ps": 180000
+                },
+                "reverse": {
+                    "width": 128,
+                    "cycle_ps": 1000,
+                    "propagation_ps": 2500,
+                    "credit_delay_ps": 180000
+                }
+            }
+        ]
+    },
+    "workload": {
+        "flows": [
+            {
+                "id": "flow0",
+                "src": "root",
+                "dst": "dst0",
+                "operation": "read",
+                "address": 4096,
+                "bytes": 64,
+                "release_ps": 0,
+                "depends_on": [],
+                "pattern": 0
+            }
+        ]
+    },
+    "measurement": {
+        "warmup_ps": 0,
+        "window_ps": 12000000,
+        "timeout_ps": 12000000
+    },
+    "lab_inputs": {
+        "op": "read",
+        "payload": 64,
+        "target": 128,
+        "offset": 0,
+        "mrrs": 4096,
+        "mps": 256,
+        "rcb": 64,
+        "cplSplit": "mps",
+        "reqHeader": 16,
+        "cplHeader": 12,
+        "packing": 100,
+        "rate": 64,
+        "reqPorts": 1,
+        "cplPorts": 1,
+        "reqLanes": 16,
+        "cplLanes": 16,
+        "switches": 1,
+        "islLanes": 16,
+        "chipLanes": 144,
+        "chipPorts": 9,
+        "reqMeters": 0.5,
+        "cplMeters": 0.5,
+        "islMeters": 0.5,
+        "nsMeter": 5,
+        "retimers": 0,
+        "retimerNs": 10,
+        "switchNs": 60,
+        "endpointNs": 120,
+        "rttMode": "derived",
+        "fixedRtt": 250,
+        "creditFixed": 180,
+        "ackFixed": 180,
+        "functions": 1,
+        "tagBits": 10,
+        "tagBudget": 768,
+        "trackMode": "transparent",
+        "trackExtra": 32,
+        "requestLimit": 0,
+        "cplLimit": 0,
+        "margin": 20,
+        "headerCredits": 0,
+        "dataCredits": 0,
+        "replayFlits": 0,
+        "clock": 1000,
+        "util": 85,
+        "channels": 1,
+        "portWidth": 0,
+        "slices": 9,
+        "fabricWidth": 0,
+        "vc": 2,
+        "cell": 64,
+        "meta": 8,
+        "fabricCreditNs": 40,
+        "egressCells": 0,
+        "voqDepth": 0,
+        "activeVoq": 8,
+        "descriptor": 32,
+        "poolKiB": 128,
+        "burst": 2,
+        "burstNs": 250,
+        "sramFactor": 12.5,
+        "simUs": 12,
+        "simArrival": "steady"
+    }
+}
